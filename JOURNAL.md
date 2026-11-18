@@ -1,5 +1,21 @@
 # JOURNAL (source of truth between sessions — update every session)
 
+## 2026-11-18 — task 2 done: discovery broadened, per-source funnel, forward collector
+- New `bot/discovery.py`: seven tagged sources: DexScreener boosts top / latest and profiles (PAID promotion), DexScreener search (12 meme keywords),
+  GeckoTerminal trending (1h/6h/24h), new pools and top-volume. De-duplicated by mint, all tags kept (`ds_search+gt_trending`). GeckoTerminal calls are
+  cached 15 min behind the shared 5 s rate limiter; empty results are never cached and an outage falls back to the last good result.
+- `bot.py`: candidates carry their source tags into `positions.source`; every cycle writes `snapshots` (all candidates with a pair, pass or fail) and
+  `funnel_src` (per-source counts); entry halts (KILL, daily loss, capacity) no longer stop data collection; new commands `collect [--once]` (no
+  trading, no keys) and `funnel`. 16 new tests (fixture parsing for every source, tag merge, cache/outage, per-source counters, collector never opens).
+- Live check (one real cycle): 282 candidates, 217 with a market pair, versus 68 / 51 in the first build (4.3x; target was 3x). Per source, share inside the
+  strategy age window (2-14 d) / pairs seen: ds_search 8% / 97, gt_volume 2% / 47, gt_trending 6% / 32, ds_boost_top 29% / 21, ds_boost_latest 25% / 20,
+  gt_new 0% / 20, ds_profile 0% / 12. Pass-all-filters: 0 of 217 in this cycle (1h momentum band rejects 202, age 201, flow 187), consistent with the backtest.
+- Reading: paid-promotion lists are the only sources with a meaningful share inside the age window, which is also why the first build looked at them; they are
+  also the most biased. One cycle is a snapshot, so rates are indicative only until the collector has run for days.
+- `docs/DEPLOY.md` (collector section): run it on the VPS now, forward data only grows with wall-clock time.
+- Next: task 3 (calibration). The backtest showed the +2..15% 1h-momentum entry underperforms random entries, so the pre-registration will test entry-rule
+  families (momentum, mean reversion, breakout after consolidation) against the random baseline with a time-ordered train/test split and a counted trial budget.
+
 ## 2026-11-18 — task 1 done: backtest result is NEGATIVE
 - Data: 156 eligible pools (liq_now <= $50M cap fixed before any result; 55 of 211 excluded), 5m candles, 14-day window 2026-11-04 -> 11-18.
 - Method: decision at candle close, fill at NEXT candle open, live risk limits (max 3 open, $1.5 daily loss, 24h re-entry block), same

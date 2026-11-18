@@ -23,8 +23,8 @@ MAX_LIQ = 50_000_000
 TASKS = [
     (0, "Network check", "done", "Setup", "Every data host reachable; Jupiter via lite-api / api.jup.ag"),
     (1, "Historical data + backtester", "done", "Evidence", "Backtest run: no edge found with the starting thresholds (see Strategy tab)"),
-    (2, "Candidate discovery", "active", "Evidence", "Broader sources, per-source funnel, forward collector"),
-    (3, "Calibration (walk-forward)", "todo", "Evidence", "Pre-registered split, trials counted, out-of-sample verdict only"),
+    (2, "Candidate discovery", "done", "Evidence", "Seven tagged sources, per-source funnel, forward collector; 4.3x more candidates"),
+    (3, "Calibration (walk-forward)", "active", "Evidence", "Pre-registered split, trials counted, out-of-sample verdict only"),
     (4, "Realistic execution costs", "todo", "Realism", "Latency, quote-based slippage, rent, failed fills"),
     (5, "Rug / safety checks", "todo", "Realism", "Token-2022, LP lock, RugCheck, sell simulation"),
     (6, "Live executor (disabled)", "todo", "Execution", "Mocked tests; nothing is sent unless live=true"),
@@ -70,9 +70,9 @@ RULES = [
 
 # What the bot/Claude is doing and what the reader must do. Update when the step changes (facts only).
 NOW = {
-    "task": 2,
-    "title": "Task 2: broadening candidate discovery",
-    "next": "Add tagged discovery sources and the forward collector, then show pass rates per source.",
+    "task": 3,
+    "title": "Task 3: calibrating thresholds without overfitting",
+    "next": "Pre-register the train/test split and verdict rule, then test entry rules against the random baseline.",
     "needs": [],   # list of strings; empty means nothing is needed from Kamil
 }
 
@@ -153,6 +153,16 @@ GLOSSARY = [
     ("Liquidity", "How much money sits in the pool. Deeper pools let you buy and sell without moving the price much."),
 ]
 
+SOURCE_NOTES = {
+    "ds_boost_top": "DexScreener boosted tokens, top. Paid promotion.",
+    "ds_boost_latest": "DexScreener newly boosted tokens. Paid promotion.",
+    "ds_profile": "DexScreener newest token profiles. Paid listing metadata.",
+    "ds_search": "DexScreener search on twelve meme keywords. Organic but keyword-biased.",
+    "gt_trending": "GeckoTerminal trending pools (1h, 6h, 24h). Already moving.",
+    "gt_new": "GeckoTerminal newest pools. Mostly brand new.",
+    "gt_volume": "GeckoTerminal pools by 24h volume. Established, highly traded.",
+}
+
 LEG_FILTERS = ["age", "liq", "vol24", "vol/liq", "h1", "h24"]
 
 
@@ -213,7 +223,7 @@ def readiness(tasks, S, cfg):
     return [
         {"gate": "Live trading is switched off in config", "status": "pass" if not cfg.get("live", False) else "fail", "detail": "live = " + str(cfg.get("live", False)).lower()},
         {"gate": "Network and data sources verified", "status": task(0), "detail": "Task 0"},
-        {"gate": "Backtest built and free of look-ahead", "status": "pending" if st[1] != "done" else "pass", "detail": "Task 1, 32 tests passing"},
+        {"gate": "Backtest built and free of look-ahead", "status": "pending" if st[1] != "done" else "pass", "detail": "Task 1, 48 tests passing"},
         {"gate": "Calibrated out-of-sample, verdict is 'edge'", "status": task(3), "detail": "Task 3. 'No edge' or 'inconclusive' keeps this red."},
         {"gate": "Realistic execution costs applied", "status": task(4), "detail": "Task 4"},
         {"gate": "Rug and safety checks tested", "status": task(5), "detail": "Task 5"},
@@ -269,7 +279,7 @@ def build(outdir, live_net=True):
         "pools_found": len(pools), "pools_eligible": len(elig), "pools_excluded": len(pools) - len(elig),
         "pools_downloaded": n_done, "candles_stored": n_candles, "pools_meeting_liq_filter": meets,
         "paper_trades": 0, "tasks_done": sum(1 for t in TASKS if t[2] == "done"), "tasks_total": len(TASKS),
-        "tests_passing": 32,
+        "tests_passing": 48,
     }]
     pdb_rows = []
     try:
@@ -291,6 +301,21 @@ def build(outdir, live_net=True):
     summary[0]["downloader_running"] = downloader_running()
     summary[0]["now_task"], summary[0]["now_title"] = NOW["task"], NOW["title"]
     summary[0]["now_next"], summary[0]["now_needs"] = NOW["next"], NOW["needs"]
+    src_rows, last_cycle = [], {}
+    try:
+        pdb2 = bot.db_connect(bot.BASE / cfg["db"])
+        for r in bot.funnel_rows(pdb2):
+            r.pop("_agg", None)
+            r["note"] = SOURCE_NOTES.get(r["source"], "")
+            src_rows.append(r)
+        fr = pdb2.execute("SELECT ts, discovered, with_pair, cheap_pass FROM funnel ORDER BY ts DESC LIMIT 1").fetchone()
+        n_cyc = pdb2.execute("SELECT COUNT(*) FROM funnel").fetchone()[0]
+        if fr:
+            last_cycle = {"collector_last": iso(fr[0]) + " UTC", "last_discovered": fr[1], "last_with_pair": fr[2], "last_cheap_pass": fr[3], "collector_cycles": n_cyc,
+                          "baseline_with_pair": 51, "baseline_discovered": 68}
+    except Exception:
+        pass
+    summary[0].update(last_cycle)
     bt_path = BASE / "data" / "backtest_last.json"
     backtest = json.loads(bt_path.read_text()) if bt_path.exists() else []
     files = {
@@ -312,6 +337,7 @@ def build(outdir, live_net=True):
         "watch": wl_rows,
         "rejects": wl_rej,
         "readiness": readiness(TASKS, summary[0], cfg),
+        "sources": src_rows,
         "glossary": [{"term": a, "meaning": b} for a, b in GLOSSARY],
     }
     for name, rows in files.items():

@@ -5,6 +5,8 @@ Usage:
   python3 bot.py run      # loop forever (scan every scan_interval_s)
   python3 bot.py once     # single cycle
   python3 bot.py report   # results + go/no-go verdict
+  python3 bot.py collect  # data collector only (no positions); add --once for a single cycle
+  python3 bot.py funnel   # per-source pass rates from collected snapshots
   Create a file named KILL next to bot.py to stop new entries.
 """
 import json
@@ -52,18 +54,14 @@ def http_json(url, body=None, retries=2, timeout=15):
 
 # ---------------------------------------------------------------- data
 
-def discover():
-    """Return {token_address: source}. NOTE: boosts/profiles are paid promotion -> biased sample."""
-    src = {}
-    for name, url in [
-        ("boost_top", f"{API}/token-boosts/top/v1"),
-        ("boost_latest", f"{API}/token-boosts/latest/v1"),
-        ("profile_latest", f"{API}/token-profiles/latest/v1"),
-    ]:
-        for x in http_json(url) or []:
-            if x.get("chainId") == "solana":
-                src.setdefault(x["tokenAddress"], name)
-    return src
+def split_tags(source):
+    return [t for t in (source or "").split("+") if t]
+
+
+def discover(cfg=None):
+    """Return {token_address: 'tagA+tagB'} from every configured source (see discovery.py). Tags let bias be measured per source."""
+    import discovery
+    return discovery.discover(cfg)
 
 
 def fetch_pairs(addrs, quote_whitelist=None):
@@ -255,6 +253,11 @@ def db_connect(path):
     CREATE TABLE IF NOT EXISTS onchain(addr TEXT PRIMARY KEY, ts REAL, ok INT, reason TEXT, pct REAL);
     CREATE TABLE IF NOT EXISTS funnel(ts REAL, discovered INT, with_pair INT, cheap_pass INT,
       opened INT, closed INT, rejects TEXT);
+    CREATE TABLE IF NOT EXISTS funnel_src(ts REAL, source TEXT, candidates INT, with_pair INT, cheap_pass INT,
+      onchain_checked INT, onchain_ok INT, rejects TEXT);
+    CREATE TABLE IF NOT EXISTS snapshots(ts REAL, addr TEXT, symbol TEXT, source TEXT, price REAL, liq REAL, vol24 REAL,
+      h1 REAL, h24 REAL, age_h REAL, buys INT, sells INT, failed TEXT, cheap_pass INT);
+    CREATE INDEX IF NOT EXISTS snap_ts ON snapshots(ts);
     """)
     return db
 
@@ -290,12 +293,24 @@ def close_position(db, cfg, pos, px, reason, now, liq):
 
 # ---------------------------------------------------------------- cycle
 
-def cycle(cfg, db, now=None):
+def record_snapshot(db, now, addr, p, source, failed):
+    ft = features_from_dex(p, now)
+    try:
+        price = float(p.get("priceUsd") or 0)
+    except ValueError:
+        price = 0.0
+    db.execute("INSERT INTO snapshots VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+               (now, addr, (p.get("baseToken") or {}).get("symbol"), source, price, ft["liq_usd"], ft["vol24_usd"], ft["h1_pct"],
+                ft["h24_pct"], ft["age_h"], ft["h1_buys"], ft["h1_sells"], json.dumps(failed), int(not failed)))
+
+
+def cycle(cfg, db, now=None, trade=True):
+    """One scan. trade=False = collector mode: discover, snapshot and run the same filters, but never open or manage positions."""
     now = now or time.time()
     st = {"opened": 0, "closed": 0}
     qw = cfg.get("quote_whitelist")
 
-    opens = db.execute("SELECT * FROM positions WHERE status='open'").fetchall()
+    opens = db.execute("SELECT * FROM positions WHERE status='open'").fetchall() if trade else []
     if opens:
         pairs = fetch_pairs([p["addr"] for p in opens], qw)
         for pos in opens:
@@ -317,52 +332,77 @@ def cycle(cfg, db, now=None):
                 st["closed"] += 1
         db.commit()
 
-    if KILL.exists():
-        st["halt"] = "KILL file"
-        return st
-    day0 = now - now % 86400
-    day_pnl = db.execute("SELECT COALESCE(SUM(pnl),0) FROM positions WHERE status='closed' AND closed_ts>=?",
-                         (day0,)).fetchone()[0]
-    if day_pnl <= -cfg["risk"]["daily_loss_limit_usd"]:
-        st["halt"] = f"daily loss limit ({day_pnl:+.2f})"
-        return st
+    # entry gates: they only stop ENTRIES. Discovery and snapshots continue, so the data keeps accumulating.
+    can_enter = trade
+    n_open = cash = 0
+    if trade:
+        if KILL.exists():
+            st["halt"], can_enter = "KILL file", False
+        else:
+            day0 = now - now % 86400
+            day_pnl = db.execute("SELECT COALESCE(SUM(pnl),0) FROM positions WHERE status='closed' AND closed_ts>=?",
+                                 (day0,)).fetchone()[0]
+            if day_pnl <= -cfg["risk"]["daily_loss_limit_usd"]:
+                st["halt"], can_enter = f"daily loss limit ({day_pnl:+.2f})", False
+        n_open = db.execute("SELECT COUNT(*) FROM positions WHERE status='open'").fetchone()[0]
+        cash = free_cash(db, cfg)
+        if can_enter and (n_open >= cfg["max_open"] or cash < cfg["position_usd"]):
+            st["halt"], can_enter = "no capacity", False
 
-    n_open = db.execute("SELECT COUNT(*) FROM positions WHERE status='open'").fetchone()[0]
-    cash = free_cash(db, cfg)
-    if n_open >= cfg["max_open"] or cash < cfg["position_usd"]:
-        st["halt"] = "no capacity"
-        return st
-
-    src = discover()
+    src = discover(cfg)
     blocked = {r[0] for r in db.execute(
         "SELECT addr FROM positions WHERE status='open' OR closed_ts>=?",
-        (now - cfg["risk"]["reentry_block_h"] * 3600,))}
+        (now - cfg["risk"]["reentry_block_h"] * 3600,))} if trade else set()
     cand = [a for a in src if a not in blocked]
     pairs = fetch_pairs(cand, qw)
     rej = Counter()
+    per = {}                                     # per-source funnel counters
+    def stat(tag):
+        return per.setdefault(tag, {"candidates": 0, "with_pair": 0, "cheap_pass": 0, "onchain_checked": 0, "onchain_ok": 0, "rejects": Counter()})
+    for a in cand:
+        for tag in split_tags(src[a]):
+            stat(tag)["candidates"] += 1
     cheap = []
     for a, p in pairs.items():
         r = check_filters(p, cfg["filters"], now)
+        record_snapshot(db, now, a, p, src.get(a, ""), r)
+        tags = split_tags(src.get(a, ""))
+        for tag in tags:
+            stat(tag)["with_pair"] += 1
+            if r:
+                stat(tag)["rejects"].update(r)
+            else:
+                stat(tag)["cheap_pass"] += 1
         if r:
             rej.update(r)
         else:
             cheap.append((a, p))
     cheap.sort(key=lambda x: -((x[1].get("volume") or {}).get("h24") or 0))
+    checks_left = cfg.get("onchain_checks_per_cycle", 5)
     for a, p in cheap:
-        if n_open >= cfg["max_open"] or cash < cfg["position_usd"]:
+        if checks_left <= 0:
             break
+        checks_left -= 1
         ok, why, pct = onchain_cached(cfg, db, a, now)
+        for tag in split_tags(src[a]):
+            stat(tag)["onchain_checked"] += 1
+            stat(tag)["onchain_ok"] += int(ok)
         if not ok:
             rej[why] += 1
             continue
-        open_position(db, cfg, a, p, src[a], pct, now)
-        n_open += 1
-        cash -= cfg["position_usd"]
-        st["opened"] += 1
+        if can_enter and n_open < cfg["max_open"] and cash >= cfg["position_usd"]:
+            open_position(db, cfg, a, p, src[a], pct, now)
+            n_open += 1
+            cash -= cfg["position_usd"]
+            st["opened"] += 1
     db.execute("INSERT INTO funnel VALUES(?,?,?,?,?,?,?)",
                (now, len(src), len(pairs), len(cheap), st["opened"], st["closed"], json.dumps(rej)))
+    for tag, v in per.items():
+        db.execute("INSERT INTO funnel_src VALUES(?,?,?,?,?,?,?,?)",
+                   (now, tag, v["candidates"], v["with_pair"], v["cheap_pass"], v["onchain_checked"], v["onchain_ok"], json.dumps(v["rejects"])))
     db.commit()
-    st.update(discovered=len(src), with_pair=len(pairs), cheap_pass=len(cheap), rejects=dict(rej))
+    st.update(discovered=len(src), with_pair=len(pairs), cheap_pass=len(cheap), rejects=dict(rej),
+              sources={t: {k: (dict(x) if isinstance(x, Counter) else x) for k, x in v.items()} for t, v in per.items()})
     return st
 
 
@@ -375,6 +415,53 @@ def run(cfg):
         except Exception as e:  # keep the loop alive; log and retry next cycle
             log(f"cycle error: {e!r}")
         time.sleep(cfg["scan_interval_s"])
+
+
+def collect(cfg):
+    """Collector mode: no positions, just discovery + snapshots + filter results every collect_interval_s."""
+    db = db_connect(BASE / cfg["db"])
+    log("collector started (no trading)")
+    while True:
+        try:
+            st = cycle(cfg, db, trade=False)
+            log({k: st[k] for k in ("discovered", "with_pair", "cheap_pass")})
+        except Exception as e:
+            log(f"collect error: {e!r}")
+        time.sleep(cfg.get("collect_interval_s", 300))
+
+
+PAID_TAGS = ("ds_boost_top", "ds_boost_latest", "ds_profile")
+
+
+def funnel_rows(db, hours=None):
+    """Per-source funnel rows from snapshots (observations) and funnel_src (candidates incl. those with no pair)."""
+    where, args = ("WHERE ts >= ?", (time.time() - hours * 3600,)) if hours else ("", ())
+    agg = {}
+    for r in db.execute(f"SELECT addr, source, cheap_pass, failed FROM snapshots {where}", args):
+        for tag in split_tags(r["source"]):
+            a = agg.setdefault(tag, {"obs": 0, "tokens": set(), "pass": 0, "fail": Counter()})
+            a["obs"] += 1
+            a["tokens"].add(r["addr"])
+            a["pass"] += r["cheap_pass"]
+            a["fail"].update(json.loads(r["failed"] or "[]"))
+    cand = {r[0]: r[1] for r in db.execute(f"SELECT source, SUM(candidates) FROM funnel_src {where} GROUP BY source", args)}
+    rows = []
+    for tag, a in sorted(agg.items(), key=lambda kv: -kv[1]["obs"]):
+        n = a["obs"]
+        rows.append({"source": tag, "paid": tag in PAID_TAGS, "candidates": cand.get(tag, 0), "with_pair": n, "unique": len(a["tokens"]),
+                     "age_ok_pct": round(100 * (1 - a["fail"].get("age", 0) / n), 1), "cheap_pass": a["pass"],
+                     "pass_pct": round(100 * a["pass"] / n, 1),
+                     "top_rejects": ", ".join(f"{k} {100 * v / n:.0f}%" for k, v in a["fail"].most_common(3)), "_agg": a})
+    return rows
+
+
+def funnel_report(db, hours=None):
+    rows = funnel_rows(db, hours)
+    print(f"{'source':<16}{'paid':<6}{'candidates':>11}{'with pair':>10}{'unique':>8}{'age ok %':>9}{'cheap pass':>11}{'pass %':>8}  top rejects")
+    for r in rows:
+        print(f"{r['source']:<16}{'yes' if r['paid'] else 'no':<6}{r['candidates']:>11}{r['with_pair']:>10}{r['unique']:>8}{r['age_ok_pct']:>8.1f}%"
+              f"{r['cheap_pass']:>11}{r['pass_pct']:>7.1f}%  {r['top_rejects']}")
+    return {r["source"]: r["_agg"] for r in rows}
 
 
 # ---------------------------------------------------------------- report
@@ -411,6 +498,13 @@ if __name__ == "__main__":
         run(cfg)
     elif cmd == "once":
         print(cycle(cfg, db_connect(BASE / cfg["db"])))
+    elif cmd == "collect":
+        if "--once" in sys.argv:
+            print(cycle(cfg, db_connect(BASE / cfg["db"]), trade=False))
+        else:
+            collect(cfg)
+    elif cmd == "funnel":
+        funnel_report(db_connect(BASE / cfg["db"]))
     elif cmd == "report":
         report(cfg, db_connect(BASE / cfg["db"]))
     else:

@@ -1,0 +1,21 @@
+[
+ {
+  "chainId": "solana",
+  "tokenAddress": "BSsmLA6UN8fzJ8qUkV4KwC5LxR7ab3TaUtcwvAyJpump",
+  "totalAmount": 500
+ },
+ {
+  "chainId": "solana",
+  "tokenAddress": "2FcsqRrhvgSfYxJWh32xW873vyqBZ9jmMyXqYSPgNtuZ",
+  "totalAmount": 500
+ },
+ {
+  "chainId": "solana",
+  "tokenAddress": "9QT8K685Hrae4k11dhGXirdtpfAaimExtyfwt8cPpump",
+  "totalAmount": 150
+ },
+ {
+  "chainId": "ethereum",
+  "tokenAddress": "0xabc"
+ }
+]

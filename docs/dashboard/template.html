@@ -226,6 +226,7 @@
         <div class="card" id="bands"></div>
         <div class="card" id="quality"></div>
       </div>
+      <div class="card" id="srcmix"></div>
       <div class="card" id="explorer"></div>
     </div>
   </section>
@@ -609,8 +610,30 @@
    ['Survivorship', fInt.format(pools.filter(function (p) { return p.liq_now_usd < floor; }).length) + ' of ' + fInt.format(pools.length) + ' below the floor', 'Only pools that exist today are listed; tokens that died are under-represented.'],
    ['Liquidity history', 'not available', 'Today\'s liquidity is used as a proxy, which can flatter results.'],
    ['Buy pressure and trade counts', 'not testable', 'The free history has no buy/sell counts, so that filter is skipped in the backtest.'],
-   ['Discovery sources', 'GeckoTerminal only', 'DexScreener boosts are paid promotion and are added, tagged, in the discovery task.']
+   ['Discovery sources', (D.sources && D.sources.length ? D.sources.length + ' tagged sources' : 'GeckoTerminal only'), 'The backtest universe is GeckoTerminal listings. The collector uses every source, so the forward data is not limited to them.']
   ].forEach(function (r) { add(ql, add(el('li'), el('span', 'nm', r[0]), el('span', 'val', r[1]), el('span', 'ds', r[2]))); }); add(qd, ql);
+
+  /* ---------- data: candidate sources ---------- */
+  var sm = $('srcmix'), SR = D.sources || [];
+  if (!SR.length) {
+    head(sm, 'Candidate sources', 'No collector data yet', 'Run the collector to see where candidates come from and how many pass each filter.');
+    add(sm, el('div', 'empty', 'Start it with: python3 bot.py collect'));
+  } else {
+    head(sm, 'Candidate sources', fInt.format(S.last_discovered) + ' candidates found in the last cycle',
+      'The first build saw ' + S.baseline_with_pair + ' tradable pairs, all from paid-promotion lists. This cycle found ' + fInt.format(S.last_with_pair) + ' pairs from ' + SR.length + ' tagged sources (' + (S.last_with_pair / S.baseline_with_pair).toFixed(1) + ' times more). Last cycle ' + S.collector_last + '.');
+    add(sm, bars(SR.map(function (r) { return { label: r.source, value: r.with_pair, kind: r.paid ? 'mute' : '', sub: r.paid ? 'paid promotion' : 'organic' }; }), Math.max.apply(null, SR.map(function (r) { return r.with_pair; }))));
+    var tw2 = el('div', 'scroll'), t2 = el('table', 'cards'), h2 = el('thead'), hr2 = el('tr');
+    ['Source', 'Type', 'Candidates', 'With pair', 'In age window', 'Pass all filters', 'Main blockers'].forEach(function (c, i) { var th = el('th', i > 1 && i < 6 ? 'r' : '', c); th.scope = 'col'; add(hr2, th); });
+    add(h2, hr2); var b2 = el('tbody');
+    SR.forEach(function (r) {
+      var tr = el('tr'); function td(l, t, c) { var x = el('td', c || '', t); x.dataset.label = l; return x; }
+      add(tr, td('Source', r.source), td('Type', r.paid ? 'Paid' : 'Organic'), td('Candidates', fInt.format(r.candidates), 'r num'), td('With pair', fInt.format(r.with_pair), 'r num'),
+        td('In age window', r.age_ok_pct + '%', 'r num'), td('Pass all filters', r.pass_pct + '%', 'r num'), td('Main blockers', r.top_rejects)); add(b2, tr);
+    });
+    add(t2, h2, b2); add(tw2, t2); add(sm, tw2);
+    add(sm, add(el('p', 'callout'), el('b', '', 'Reading this: '), document.createTextNode('only a small share of every source sits inside the strategy\'s age window, and almost none pass the one-hour momentum band at any given moment. One cycle is a snapshot; the collector keeps adding cycles so these rates become reliable.')),
+      tableView(['Source', 'Pairs seen'], SR.map(function (r) { return [r.source, r.with_pair]; })));
+  }
 
   /* ---------- log: glossary ---------- */
   var gs = $('glossary'); head(gs, 'Glossary', 'Terms in plain words');

@@ -1,0 +1,94 @@
+{
+ "data": [
+  {
+   "id": "solana_Eo3nPWKC2NcqLVvRjm1upK9oiLRG1mkVTSorjwZpqcM1",
+   "type": "pool",
+   "attributes": {
+    "address": "Eo3nPWKC2NcqLVvRjm1upK9oiLRG1mkVTSorjwZpqcM1",
+    "name": "VICEPEPE / SOL",
+    "pool_created_at": "2026-11-18T11:30:28Z",
+    "reserve_in_usd": "0.0"
+   },
+   "relationships": {
+    "base_token": {
+     "data": {
+      "id": "solana_9MYi1Vk5cLt9nRtd6c4WeDPvSCmyVVaKFy2Y48eGjSzA",
+      "type": "token"
+     }
+    },
+    "quote_token": {
+     "data": {
+      "id": "solana_So11111111111111111111111111111111111111112",
+      "type": "token"
+     }
+    },
+    "dex": {
+     "data": {
+      "id": "meteora-dbc",
+      "type": "dex"
+     }
+    }
+   }
+  },
+  {
+   "id": "solana_6vP1EXU4QUiBKiErBpnUfSm7EnCZMKJ8xkP1qnm3r53B",
+   "type": "pool",
+   "attributes": {
+    "address": "6vP1EXU4QUiBKiErBpnUfSm7EnCZMKJ8xkP1qnm3r53B",
+    "name": "$AURA / SOL",
+    "pool_created_at": "2026-11-18T11:30:07Z",
+    "reserve_in_usd": "591.3884"
+   },
+   "relationships": {
+    "base_token": {
+     "data": {
+      "id": "solana_3cmAxwrCaiU9bFCbi8vGY98pFTUALVpP2aqdQg7npump",
+      "type": "token"
+     }
+    },
+    "quote_token": {
+     "data": {
+      "id": "solana_So11111111111111111111111111111111111111112",
+      "type": "token"
+     }
+    },
+    "dex": {
+     "data": {
+      "id": "pump-fun",
+      "type": "dex"
+     }
+    }
+   }
+  },
+  {
+   "id": "solana_2B1VEn1ne3kbfEMBqkiDyCrtStQPthUNLMUKwgD4jjyG",
+   "type": "pool",
+   "attributes": {
+    "address": "2B1VEn1ne3kbfEMBqkiDyCrtStQPthUNLMUKwgD4jjyG",
+    "name": "BILLS / TTWO",
+    "pool_created_at": "2026-11-18T11:30:05Z",
+    "reserve_in_usd": "2747.8915"
+   },
+   "relationships": {
+    "base_token": {
+     "data": {
+      "id": "solana_J4PXaRcBqQrdDh1ryUFbfYNvBmkz3FXnUNfyxzF1pump",
+      "type": "token"
+     }
+    },
+    "quote_token": {
+     "data": {
+      "id": "solana_TTWofwAge91oFhZs7kpQdyrVRkmevgM88xijGvQFbKo",
+      "type": "token"
+     }
+    },
+    "dex": {
+     "data": {
+      "id": "pump-fun",
+      "type": "dex"
+     }
+    }
+   }
+  }
+ ]
+}
