@@ -18,11 +18,14 @@ import math
 import random
 import sqlite3
 import time
+from pathlib import Path
 from collections import Counter, defaultdict
 
 import bot
 
 TF = 300            # candle length, seconds
+EXIT_MODE = "wick"  # "wick": exits can trip on a candle's low/high (pessimistic). "close": exits evaluated only at candle closes
+                    # with bot.exit_reason (what a 5-minute poller would see; optimistic about wicks). Applied to signal AND null model.
 HIST_SKIP = ("liq", "vol/liq", "flow")   # no historical input available from OHLCV
 
 
@@ -66,20 +69,26 @@ def simulate_trade(cs, i_entry, cfg, liq_for_costs, size=None):
     exit_px, reason, k_exit = None, None, None
     for k in range(i_entry, len(cs)):
         ts, o, h, l, cl, _ = cs[k]
-        lv = bot.exit_levels(pos, e)               # levels from the peak BEFORE this candle
-        if l <= lv["stop"]:
-            exit_px, reason = min(o, lv["stop"]), "stop"
-        elif lv["trail"] is not None and l <= lv["trail"]:
-            exit_px, reason = min(o, lv["trail"]), "trail"
+        if EXIT_MODE == "close":                    # same function as the live loop, evaluated at each candle close
+            pos["peak_px"] = max(pos["peak_px"], cl)
+            why = bot.exit_reason(pos, cl, liq_for_costs, ts + TF, e)
+            if why:
+                exit_px, reason = cl, why
         else:
-            pos["peak_px"] = max(pos["peak_px"], h)
-            lv = bot.exit_levels(pos, e)           # peak after this candle's high
-            if lv["trail"] is not None and l <= lv["trail"] and h < lv["tp"]:
-                exit_px, reason = lv["trail"], "trail"   # high first, then pulled back (pessimistic ordering)
-            elif h >= lv["tp"]:
-                exit_px, reason = max(o, lv["tp"]) if o >= lv["tp"] else lv["tp"], "tp"
-            elif (ts + TF - pos["opened_ts"]) / 3600 >= e["max_hold_h"]:
-                exit_px, reason = cl, "time"
+          lv = bot.exit_levels(pos, e)              # levels from the peak BEFORE this candle
+          if l <= lv["stop"]:
+              exit_px, reason = min(o, lv["stop"]), "stop"
+          elif lv["trail"] is not None and l <= lv["trail"]:
+              exit_px, reason = min(o, lv["trail"]), "trail"
+          else:
+              pos["peak_px"] = max(pos["peak_px"], h)
+              lv = bot.exit_levels(pos, e)           # peak after this candle's high
+              if lv["trail"] is not None and l <= lv["trail"] and h < lv["tp"]:
+                  exit_px, reason = lv["trail"], "trail"   # high first, then pulled back (pessimistic ordering)
+              elif h >= lv["tp"]:
+                  exit_px, reason = max(o, lv["tp"]) if o >= lv["tp"] else lv["tp"], "tp"
+              elif (ts + TF - pos["opened_ts"]) / 3600 >= e["max_hold_h"]:
+                  exit_px, reason = cl, "time"
         if reason:
             k_exit = k
             break
@@ -87,7 +96,8 @@ def simulate_trade(cs, i_entry, cfg, liq_for_costs, size=None):
         k_exit, exit_px, reason = len(cs) - 1, cs[-1][4], "data_end"
     proceeds = bot.proceeds_sell(exit_px, qty, liq_for_costs, c)
     return {"entry_ts": cs[i_entry][0], "exit_ts": cs[k_exit][0] + TF, "entry_px": px0, "exit_px": exit_px,
-            "reason": reason, "pnl": proceeds - size, "size": size}
+            "reason": reason, "pnl": proceeds - size, "size": size,
+            "wick_only": bool(EXIT_MODE == "wick" and reason in ("stop", "trail") and cs[k_exit][4] > exit_px)}
 
 
 # ---------------------------------------------------------------- portfolio replay
@@ -270,17 +280,75 @@ def report(pools, trades, funnel, signals, cfg, args, start, end):
     print("=" * 78)
 
 
+# ---------------------------------------------------------------- suite (all variants -> table + JSON for the dashboard)
+
+def _variant(pools, start, end, cfg, liq_gate, mode):
+    global EXIT_MODE
+    EXIT_MODE = mode
+    trades, funnel, signals = run_backtest(pools, start, end, cfg, liq_gate, HIST_SKIP)
+    s = stats(trades)
+    sig = signal_trades(pools, signals, cfg, liq_gate)
+    ss = stats(sig)
+    lo, hi = bootstrap_ci([t["pnl"] for t in sig])
+    means, n_elig = null_model(pools, start, end, cfg, max(ss["n"], 1), liq_gate=liq_gate)
+    means.sort()
+    nm = means[len(means) // 2] if means else 0.0
+    beat = 100 * sum(m < ss["mean"] for m in means) / len(means) if means else 0.0
+    stops = [t for t in trades if t["reason"] in ("stop", "trail")]
+    wick = 100 * sum(t["wick_only"] for t in stops) / len(stops) if stops else 0.0
+    return {"gate": liq_gate, "mode": mode, "port": s, "sig": ss, "ci": (lo, hi), "null_median": nm, "beat_pct": beat,
+            "exits": dict(Counter(t["reason"] for t in trades)), "funnel": dict(funnel), "wick_share": wick, "n_elig": n_elig}
+
+
+def suite(db, days, cfg, json_path=None):
+    global EXIT_MODE
+    saved = EXIT_MODE
+    pools, start, end = load(db, days, max_liq_now=cfg.get("universe", {}).get("max_liq_now_usd"))
+    res = [_variant(pools, start, end, cfg, g, m) for m, g in (("wick", "none"), ("wick", "now"), ("close", "none"), ("close", "now"))]
+    EXIT_MODE = saved
+    print(f"{'exits':<6} {'liq gate':<9} {'trades':>6} {'net $':>8} {'PF':>5} {'win%':>5} {'maxDD':>6} | {'signal mean/trade [95% CI]':<34} {'null median':>11} {'beats null':>10}")
+    for r in res:
+        p, ci = r["port"], r["ci"]
+        print(f"{r['mode']:<6} {r['gate']:<9} {p['n']:>6} {p['net']:>+8.2f} {p['pf']:>5.2f} {p['win']:>5.0f} {p['max_dd']:>6.2f} | "
+              f"{r['sig']['mean']:>+7.4f} [{ci[0]:+.4f},{ci[1]:+.4f}] n={r['sig']['n']:<4} {r['null_median']:>+11.4f} {r['beat_pct']:>9.0f}%")
+    print("Share of stop/trail exits that were wick-only (close recovered above the level):", f"{res[0]['wick_share']:.0f}%")
+    if json_path:
+        import json
+        h, c = res[0], res[2]
+        d = lambda r: f"{r['port']['n']} trades, net {r['port']['net']:+.2f} USD, PF {r['port']['pf']:.2f}, win {r['port']['win']:.0f}%, max drawdown {r['port']['max_dd']:.2f} USD"
+        rows = [
+            {"label": "Headline (pessimistic wick exits, no liquidity gate)", "value": f"{h['port']['net']:+.2f} USD", "note": d(h) + f" over {days:g} days on a $5 bankroll."},
+            {"label": "Signal trades vs random entries", "value": f"{h['sig']['mean']:+.3f} vs {h['null_median']:+.3f} USD/trade",
+             "note": f"Signal mean {h['sig']['mean']:+.4f} USD per trade (95% CI {h['ci'][0]:+.4f} to {h['ci'][1]:+.4f}, n={h['sig']['n']}). Random entries with the same exits and costs: median {h['null_median']:+.4f}. The signal beat {h['beat_pct']:.0f}% of random runs."},
+            {"label": "Optimistic bracket (exits judged at 5-minute closes only)", "value": f"{c['port']['net']:+.2f} USD", "note": d(c) + f"; signal beat {c['beat_pct']:.0f}% of random runs."},
+            {"label": "With today's liquidity as a gate (look-ahead)", "value": f"{res[1]['port']['net']:+.2f} USD", "note": d(res[1])},
+            {"label": "Exit mix (headline)", "value": ", ".join(f"{k} {v}" for k, v in sorted(h["exits"].items())), "note": f"{h['wick_share']:.0f}% of stop and trailing exits were triggered by a wick whose candle closed back above the level."},
+            {"label": "Reading of this test", "value": "No edge found with the starting thresholds", "note": "Both exit brackets lose money after costs and the signal does not beat random entries. The thresholds were set before this data was seen, so nothing was tuned to it. This is not the calibrated verdict (task 3). The known biases (survivorship, today's liquidity, untested flow filter) favour the strategy, so a worse live result is more likely than a better one."},
+            {"label": "Not tested here", "value": "liquidity, volume/liquidity, buy pressure", "note": "No historical data for these, so the backtest runs without them."},
+        ]
+        Path(json_path).parent.mkdir(parents=True, exist_ok=True)
+        Path(json_path).write_text(json.dumps(rows))
+    return res
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--days", type=float, default=14)
     ap.add_argument("--liq-gate", choices=["none", "now"], default="none")
     ap.add_argument("--skip-filters", default=",".join(HIST_SKIP))
     ap.add_argument("--db", default=None)
+    ap.add_argument("--exits", choices=["wick", "close"], default="wick")
+    ap.add_argument("--suite", action="store_true", help="run wick/close x liq-gate none/now, print table")
+    ap.add_argument("--json", default=None, help="with --suite: write dashboard rows here")
     a = ap.parse_args()
     a.skip = tuple(x for x in a.skip_filters.split(",") if x)
     import data
     db = data.connect(a.db) if a.db else data.connect()
     cfg = bot.load_cfg()
+    EXIT_MODE = a.exits
+    if a.suite:
+        suite(db, a.days, cfg, a.json)
+        raise SystemExit(0)
     pools, start, end = load(db, a.days, max_liq_now=cfg.get("universe", {}).get("max_liq_now_usd"))
     trades, funnel, signals = run_backtest(pools, start, end, cfg, a.liq_gate, a.skip)
     report(pools, trades, funnel, signals, cfg, a, start, end)

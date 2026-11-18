@@ -107,6 +107,29 @@ class TestTradeSimulation(unittest.TestCase):
         self.assertLess(paid, free)
 
 
+class TestCloseMode(unittest.TestCase):
+    def setUp(self):
+        self.cfg = copy.deepcopy(CFG)
+        self.cfg["costs"] = dict(fee_pct=0.0, slippage_pct=0.0, network_fee_usd=0.0)
+        bt.EXIT_MODE = "close"
+
+    def tearDown(self):
+        bt.EXIT_MODE = "wick"
+
+    def test_wick_through_stop_that_recovers_is_not_a_stop_in_close_mode(self):
+        cs = [candle(T0, 1.0, 1.0, 1.0, 1.0), candle(T0 + 300, 1.0, 1.0, 0.7, 0.99), candle(T0 + 600, 0.99, 1.0, 0.99, 1.0)]
+        self.assertEqual(bt.simulate_trade(cs, 0, self.cfg, 1e12)["reason"], "data_end")
+        bt.EXIT_MODE = "wick"
+        tr = bt.simulate_trade(cs, 0, self.cfg, 1e12)
+        self.assertEqual(tr["reason"], "stop")
+        self.assertTrue(tr["wick_only"])
+
+    def test_close_mode_stop_fills_at_close(self):
+        cs = [candle(T0, 1.0, 1.0, 1.0, 1.0), candle(T0 + 300, 1.0, 1.0, 0.7, 0.8)]
+        tr = bt.simulate_trade(cs, 0, self.cfg, 1e12)
+        self.assertEqual((tr["reason"], tr["exit_px"]), ("stop", 0.8))
+
+
 class TestSharedLogic(unittest.TestCase):
     """Backtester and live loop must use identical thresholds."""
 

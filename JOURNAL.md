@@ -1,5 +1,33 @@
 # JOURNAL (source of truth between sessions — update every session)
 
+## 2026-11-18 — task 1 done: backtest result is NEGATIVE
+- Data: 156 eligible pools (liq_now <= $50M cap fixed before any result; 55 of 211 excluded), 5m candles, 14-day window 2026-11-04 -> 11-18.
+- Method: decision at candle close, fill at NEXT candle open, live risk limits (max 3 open, $1.5 daily loss, 24h re-entry block), same
+  `check_features` / `exit_levels` / `exit_reason` / cost model as the live loop. Filters with no historical input (liquidity, vol/liq,
+  buy pressure) are NOT evaluated. Costs use today's liquidity (look-ahead proxy). Thresholds are the untuned starting guesses, so nothing was fitted to this data.
+- Results (`python3 backtest.py --days 14 --suite`):
+
+| exits | liq gate | trades | net $ | PF | win % | max DD | signal mean/trade [95% CI] | random-entry median | signal beats |
+|---|---|---|---|---|---|---|---|---|---|
+| wick (pessimistic) | none | 67 | -4.08 | 0.42 | 36 | 4.08 | -0.0735 [-0.0898, -0.0567] | -0.0494 | 0% |
+| wick | now | 66 | -4.09 | 0.38 | 33 | 4.26 | -0.0693 [-0.0883, -0.0491] | -0.0461 | 2% |
+| close-only (optimistic) | none | 56 | -4.12 | 0.42 | 27 | 4.28 | -0.0824 [-0.1030, -0.0591] | -0.0441 | 0% |
+| close-only | now | 75 | -3.02 | 0.59 | 32 | 3.02 | -0.0732 [-0.0957, -0.0488] | -0.0370 | 0% |
+
+- Reading: NO EDGE with the starting thresholds. The strategy loses ~$3-4 of the $5 in 14 days under every variant, and its entries are WORSE than
+  random entries with the same exits and costs (CI of the signal mean excludes zero on the negative side). Entering after a +2..15% one-hour move
+  looks like buying short-term exhaustion in this sample.
+- Robustness: 65% of wick-mode stop/trail exits were wicks whose 5m candle closed back above the level, so the exit assumption matters for the
+  numbers, but the conclusion does not change between the pessimistic and optimistic brackets (both are applied to signal and random baseline).
+- Biases that favour the strategy (so reality is likely worse): survivorship (only pools alive today), today's liquidity, no flow filter. Not a calibrated
+  verdict: task 3 does the pre-registered walk-forward test. One caution against over-reading: 258 signal trades over 14 days in a single market regime.
+- Also found: a $1 position pays ~3.5% round-trip cost (network fee $0.01/swap is the largest part); break-even needs +3.57% (about +20.7% if token-account
+  rent is not refunded and not modelled yet); with stop -15% / TP +40% the required win rate is 33.8%. At any instant 0 of 82 pools pass all filters
+  (the 1h momentum band blocks 77).
+- Tests: 32 passing (added close-mode + wick-only diagnostics). Dashboard v4 published (Strategy tab, finding card, readiness gates).
+- Next: task 2 (more discovery sources + forward collector), then task 3 (walk-forward calibration; expect to test whether a mean-reversion or
+  breakout-after-consolidation entry beats the random baseline instead of chasing a +2..15% hour).
+
 ## 2026-11-18 — task 1 in progress + monitoring dashboard
 - Refactor: `bot.py` now has a feature layer (`features_from_dex`, `check_features`: missing input -> "not evaluable", never a silent pass)
   and `exit_levels` (single source of exit thresholds, used by `exit_reason` and the backtester). 12 original tests still pass.

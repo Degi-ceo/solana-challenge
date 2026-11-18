@@ -22,8 +22,8 @@ MAX_LIQ = 50_000_000
 # Task board. Update `status` as work proceeds (done | active | todo). Facts, not hopes.
 TASKS = [
     (0, "Network check", "done", "Setup", "Every data host reachable; Jupiter via lite-api / api.jup.ag"),
-    (1, "Historical data + backtester", "active", "Evidence", "Downloader and point-in-time replay built; candles downloading"),
-    (2, "Candidate discovery", "todo", "Evidence", "Broader sources, per-source funnel, forward collector"),
+    (1, "Historical data + backtester", "done", "Evidence", "Backtest run: no edge found with the starting thresholds (see Strategy tab)"),
+    (2, "Candidate discovery", "active", "Evidence", "Broader sources, per-source funnel, forward collector"),
     (3, "Calibration (walk-forward)", "todo", "Evidence", "Pre-registered split, trials counted, out-of-sample verdict only"),
     (4, "Realistic execution costs", "todo", "Realism", "Latency, quote-based slippage, rent, failed fills"),
     (5, "Rug / safety checks", "todo", "Realism", "Token-2022, LP lock, RugCheck, sell simulation"),
@@ -70,9 +70,9 @@ RULES = [
 
 # What the bot/Claude is doing and what the reader must do. Update when the step changes (facts only).
 NOW = {
-    "task": 1,
-    "title": "Downloading price history for the backtest",
-    "next": "Run the 14-day backtest, then write the results and the bias statement into the journal.",
+    "task": 2,
+    "title": "Task 2: broadening candidate discovery",
+    "next": "Add tagged discovery sources and the forward collector, then show pass rates per source.",
     "needs": [],   # list of strings; empty means nothing is needed from Kamil
 }
 
@@ -213,7 +213,7 @@ def readiness(tasks, S, cfg):
     return [
         {"gate": "Live trading is switched off in config", "status": "pass" if not cfg.get("live", False) else "fail", "detail": "live = " + str(cfg.get("live", False)).lower()},
         {"gate": "Network and data sources verified", "status": task(0), "detail": "Task 0"},
-        {"gate": "Backtest built and free of look-ahead", "status": "pending" if st[1] != "done" else "pass", "detail": "Task 1, 30 tests passing so far"},
+        {"gate": "Backtest built and free of look-ahead", "status": "pending" if st[1] != "done" else "pass", "detail": "Task 1, 32 tests passing"},
         {"gate": "Calibrated out-of-sample, verdict is 'edge'", "status": task(3), "detail": "Task 3. 'No edge' or 'inconclusive' keeps this red."},
         {"gate": "Realistic execution costs applied", "status": task(4), "detail": "Task 4"},
         {"gate": "Rug and safety checks tested", "status": task(5), "detail": "Task 5"},
@@ -269,7 +269,7 @@ def build(outdir, live_net=True):
         "pools_found": len(pools), "pools_eligible": len(elig), "pools_excluded": len(pools) - len(elig),
         "pools_downloaded": n_done, "candles_stored": n_candles, "pools_meeting_liq_filter": meets,
         "paper_trades": 0, "tasks_done": sum(1 for t in TASKS if t[2] == "done"), "tasks_total": len(TASKS),
-        "tests_passing": 30,
+        "tests_passing": 32,
     }]
     pdb_rows = []
     try:

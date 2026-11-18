@@ -12,7 +12,7 @@ Write results to `JOURNAL.md`. If something essential is blocked, stop and tell 
 - Entry point-in-time only: a filter may use only data available at that candle (no look-ahead).
 **Done when:** `python3 bot/backtest.py --days 14` prints trades, net PnL after costs, profit factor, max drawdown, and funnel counts; tests cover look-ahead.
 
-## 2. Candidate discovery
+## 2. Candidate discovery  <!-- next -->
 Current discovery uses DexScreener boosts/profiles (= paid promotion, biased and tiny). Add broader sources (search/trending/top volume,
 GeckoTerminal trending/new pools) and tag each candidate with its source so bias can be measured.
 **Done when:** funnel report shows candidates per source and pass rates per filter; sample size per cycle is meaningfully larger.

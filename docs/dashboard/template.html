@@ -147,6 +147,11 @@
   .timeline > li:first-child { border-top: 0; padding-top: 0; }
   .timeline .when { font-size: 13px; color: var(--ink2); }
   @media (max-width: 560px) { .timeline > li { grid-template-columns: minmax(0, 1fr); } }
+  .rows.stackv > li { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  .rows.stackv .val { grid-column: 1; grid-row: auto; text-align: left; white-space: normal; font-size: 17px; }
+  .rows.stackv .ds { font-size: 14px; }
+  .finding { border-color: var(--bad); }
+  .finding .head h2 { font-size: 20px; }
   .gates > li { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; gap: 2px 10px; padding: 10px 0; border-top: 1px solid var(--line); align-items: start; }
   .gates > li:first-child { border-top: 0; padding-top: 0; }
   .gi { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 700; border: 1.5px solid var(--ink3); color: var(--ink2); margin-top: 2px; }
@@ -186,6 +191,7 @@
 <main class="wrap">
   <section class="panel" id="p-overview" role="tabpanel" aria-labelledby="t-overview">
     <div class="stack">
+      <div class="card finding" id="finding" hidden></div>
       <div class="grid2">
         <div class="card" id="now"></div>
         <div class="card needs" id="needs"></div>
@@ -200,13 +206,13 @@
 
   <section class="panel" id="p-strategy" role="tabpanel" aria-labelledby="t-strategy" hidden>
     <div class="stack">
+      <div class="card" id="backtest"></div>
       <div class="card" id="trade"></div>
       <div class="grid2 even">
         <div class="card" id="rejects"></div>
         <div class="card" id="ready"></div>
       </div>
       <div class="card" id="watch"></div>
-      <div class="card" id="backtest"></div>
     </div>
   </section>
 
@@ -585,7 +591,15 @@
      ['Bias statement', 'Survivorship share, filters that could not be tested, and costs that use today\'s liquidity.']
     ].forEach(function (r) { add(wl2, add(el('li'), el('span', 'nm', r[0]), el('span', 'ds', r[1]))); }); add(bt, wl2);
   } else {
-    var bl = el('ul', 'rows'); D.backtest.forEach(function (r) { var li = el('li'); add(li, el('span', 'nm', r.label), el('span', 'val', r.value)); if (r.note) add(li, el('span', 'ds', r.note)); add(bl, li); }); add(bt, bl);
+    var bl = el('ul', 'rows stackv'); D.backtest.forEach(function (r) { var li = el('li'); add(li, el('span', 'nm', r.label), el('span', 'val', r.value)); if (r.note) add(li, el('span', 'ds', r.note)); add(bl, li); }); add(bt, bl);
+  }
+
+  /* ---------- overview: latest finding ---------- */
+  if (D.backtest.length) {
+    var fd = $('finding'); fd.hidden = false;
+    head(fd, 'Latest finding \u00b7 backtest', 'The starting strategy loses money on 14 days of history', 'Net ' + D.backtest[0].value + ' on a $5 bankroll over 14 days, with pessimistic exits' + '. Entering at random would have lost less.');
+    var fl = el('ul', 'rows stackv'); [D.backtest[1], D.backtest[2]].forEach(function (r) { add(fl, add(el('li'), el('span', 'nm', r.label), el('span', 'val', r.value), el('span', 'ds', r.note))); }); add(fd, fl);
+    var go = el('button', 'btn', 'See the full evidence'); go.type = 'button'; go.onclick = function () { show('strategy', true); }; add(fd, go);
   }
 
   /* ---------- data: quality ---------- */
