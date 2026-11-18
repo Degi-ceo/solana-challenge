@@ -8,7 +8,7 @@
   of the replay tests was vacuous (no trades fired) and was fixed after a stricter test exposed it.
 - `data.py`: universe from GeckoTerminal listings (211 pools, age 2-40 d, liq >= $5k, SOL/USDC/USDT quote), 5m candles resumable at 5 s/request.
 - DATA QUALITY FLAG: some pools report absurd liquidity (e.g. QNT/USDC $4.3B). Rule fixed BEFORE looking at any backtest result:
-  exclude pools with liq_now > $50M (blue-chips / bad data) from the memecoin universe. 56 of 211 fall under this rule.
+  exclude pools with liq_now > $50M (blue-chips / bad data) from the memecoin universe. 55 of 211 fall under this rule.
 - Not done yet for task 1: finish download, run `backtest.py --days 14`, write results and the bias statement here, commit.
 - Dashboard: `bot/export_status.py` writes JSON snapshots (summary, tasks, pools, paper trades) consumed by a Claude artifact
   "Solana Paper Bot Monitor". It is a snapshot refreshed on republish, not a live stream from the sandbox.
