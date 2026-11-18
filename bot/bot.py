@@ -95,33 +95,68 @@ def age_h(p, now=None):
     return ((now or time.time()) * 1000 - t) / 3.6e6 if t else None
 
 
-def check_filters(p, f, now=None):
-    """Return list of failed filter names (empty = pass)."""
-    r = []
-    a = age_h(p, now)
-    liq = (p.get("liquidity") or {}).get("usd") or 0
-    v24 = (p.get("volume") or {}).get("h24") or 0
+def features_from_dex(p, now=None):
+    """Normalise a DexScreener pair into the feature dict used by check_features.
+    A value of None means 'not available' (never silently 0)."""
+    liq = (p.get("liquidity") or {}).get("usd")
     ch = p.get("priceChange") or {}
-    h1, h24 = ch.get("h1"), ch.get("h24")
     tx = (p.get("txns") or {}).get("h1") or {}
-    buys, sells = tx.get("buys", 0), tx.get("sells", 0)
-    if a is None or not f["min_age_h"] <= a <= f["max_age_h"]:
-        r.append("age")
-    if liq < f["min_liq_usd"]:
-        r.append("liq")
-    if v24 < f["min_vol24_usd"]:
-        r.append("vol24")
-    vl = v24 / liq if liq else 0
-    if not f["vol_liq_min"] <= vl <= f["vol_liq_max"]:
-        r.append("vol/liq")
-    if h1 is None or not f["h1_change_min"] <= h1 <= f["h1_change_max"]:
-        r.append("h1")
-    if h24 is None or not f["h24_change_min"] <= h24 <= f["h24_change_max"]:
-        r.append("h24")
-    n = buys + sells
-    if n < f["min_h1_txns"] or buys / n < f["min_h1_buy_ratio"]:
-        r.append("flow")
-    return r
+    return {
+        "age_h": age_h(p, now),
+        "liq_usd": liq,
+        "vol24_usd": (p.get("volume") or {}).get("h24"),
+        "h1_pct": ch.get("h1"),
+        "h24_pct": ch.get("h24"),
+        "h1_buys": tx.get("buys"),
+        "h1_sells": tx.get("sells"),
+    }
+
+
+# Which feature each filter needs. A filter whose inputs are None is "not evaluable" (reported, not passed).
+FILTER_INPUTS = {
+    "age": ("age_h",), "liq": ("liq_usd",), "vol24": ("vol24_usd",),
+    "vol/liq": ("vol24_usd", "liq_usd"), "h1": ("h1_pct",), "h24": ("h24_pct",),
+    "flow": ("h1_buys", "h1_sells"),
+}
+
+
+def check_features(ft, f, skip=()):
+    """Return (failed, not_evaluable) filter-name lists. `skip` = filters deliberately not applied
+    (e.g. the backtest has no historical liquidity). None inputs: age/h1/h24 fail (as before); others are
+    reported as not evaluable and do NOT count as a pass for the caller to rely on."""
+    failed, na = [], []
+    for name, keys in FILTER_INPUTS.items():
+        if name in skip:
+            continue
+        if any(ft.get(k) is None for k in keys):
+            (failed if name in ("age", "h1", "h24") else na).append(name)
+    if "age" not in failed and "age" not in skip and not f["min_age_h"] <= ft["age_h"] <= f["max_age_h"]:
+        failed.append("age")
+    liq, v24 = ft.get("liq_usd"), ft.get("vol24_usd")
+    if "liq" not in na and "liq" not in skip and liq < f["min_liq_usd"]:
+        failed.append("liq")
+    if "vol24" not in na and "vol24" not in skip and v24 < f["min_vol24_usd"]:
+        failed.append("vol24")
+    if "vol/liq" not in na and "vol/liq" not in skip:
+        vl = v24 / liq if liq else 0
+        if not f["vol_liq_min"] <= vl <= f["vol_liq_max"]:
+            failed.append("vol/liq")
+    if "h1" not in failed and "h1" not in skip and not f["h1_change_min"] <= ft["h1_pct"] <= f["h1_change_max"]:
+        failed.append("h1")
+    if "h24" not in failed and "h24" not in skip and not f["h24_change_min"] <= ft["h24_pct"] <= f["h24_change_max"]:
+        failed.append("h24")
+    if "flow" not in na and "flow" not in skip:
+        n = ft["h1_buys"] + ft["h1_sells"]
+        if n < f["min_h1_txns"] or ft["h1_buys"] / n < f["min_h1_buy_ratio"]:
+            failed.append("flow")
+    return failed, na
+
+
+def check_filters(p, f, now=None):
+    """Live-loop wrapper: failed filter names for a DexScreener pair (empty = pass).
+    Missing DexScreener fields count as failures here (live must never trade on unknowns)."""
+    failed, na = check_features(features_from_dex(p, now), f)
+    return failed + na
 
 
 def rpc(cfg, method, params):
@@ -179,17 +214,26 @@ def proceeds_sell(px, qty, liq, c):
     return gross * (1 - _slip(c, gross, liq)) * (1 - c["fee_pct"] / 100) - c["network_fee_usd"]
 
 
+def exit_levels(pos, e):
+    """Price levels at which each price-based exit trips, given the position's peak so far.
+    Single source of the thresholds: exit_reason() and the backtester both use it."""
+    lv = {"stop": pos["entry_px"] * (1 - e["stop_loss_pct"] / 100),
+          "tp": pos["entry_px"] * (1 + e["take_profit_pct"] / 100), "trail": None}
+    if 100 * (pos["peak_px"] / pos["entry_px"] - 1) >= e["trail_activate_pct"]:
+        lv["trail"] = pos["peak_px"] * (1 - e["trail_pct"] / 100)
+    return lv
+
+
 def exit_reason(pos, px, liq, now, e):
     """pos['peak_px'] must already include px."""
-    chg = 100 * (px / pos["entry_px"] - 1)
-    peak_chg = 100 * (pos["peak_px"] / pos["entry_px"] - 1)
+    lv = exit_levels(pos, e)
     if liq < pos["entry_liq"] * e["liq_drop_exit_frac"]:
         return "liq_drop"
-    if chg <= -e["stop_loss_pct"]:
+    if px <= lv["stop"]:
         return "stop"
-    if chg >= e["take_profit_pct"]:
+    if px >= lv["tp"]:
         return "tp"
-    if peak_chg >= e["trail_activate_pct"] and px <= pos["peak_px"] * (1 - e["trail_pct"] / 100):
+    if lv["trail"] is not None and px <= lv["trail"]:
         return "trail"
     if (now - pos["opened_ts"]) / 3600 >= e["max_hold_h"]:
         return "time"
