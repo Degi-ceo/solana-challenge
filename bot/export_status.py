@@ -61,8 +61,25 @@ RULES = [
     ("limits", "bankroll_usd", "Bankroll", "USD", "The whole experiment."),
     ("limits", "position_usd", "Position size", "USD", "Per trade."),
     ("limits", "max_open", "Maximum open positions", "count", "Hard cap enforced in code."),
+    ("verdict", "min_closed_trades", "Closed trades needed for a verdict", "count", "Below this the verdict is always 'not enough data'."),
+    ("verdict", "min_profit_factor", "Profit factor needed", "ratio", "Gross wins divided by gross losses after costs."),
+    ("verdict", "min_net_pnl_usd", "Net profit needed", "USD", "Must be above this after all costs."),
     ("universe", "max_liq_now_usd", "Universe liquidity cap", "USD", "Pools above this are blue-chips or bad data. Fixed before any result."),
 ]
+
+
+# What the bot/Claude is doing and what the reader must do. Update when the step changes (facts only).
+NOW = {
+    "task": 1,
+    "title": "Downloading price history for the backtest",
+    "next": "Run the 14-day backtest, then write the results and the bias statement into the journal.",
+    "needs": [],   # list of strings; empty means nothing is needed from Kamil
+}
+
+
+def downloader_running():
+    import subprocess
+    return subprocess.run(["pgrep", "-f", "data.py candles"], capture_output=True).returncode == 0
 
 
 def iso(ts):
@@ -72,7 +89,12 @@ def iso(ts):
 def rules_rows(cfg):
     rows = []
     for grp, key, name, unit, why in RULES:
-        v = (cfg.get(grp) or {}).get(key) if grp not in ("limits",) else cfg.get(key)
+        if grp == "limits":
+            v = cfg.get(key)
+        elif grp == "verdict":
+            v = cfg["go_nogo"].get(key)
+        else:
+            v = (cfg.get(grp) or {}).get(key)
         rows.append({"key": key, "group": grp, "name": name, "value": v, "unit": unit, "why": why})
     return rows
 
@@ -88,16 +110,20 @@ def activity_rows():
             continue
         bullets = [re.sub(r"\s+", " ", b.strip("- ").strip()) for b in re.findall(r"(?m)^- .*", body)]
         bullets = [re.sub(r"[`*]", "", b) for b in bullets]
-        rows.append({"date": m.group(1), "title": m.group(2), "detail": " ".join(bullets[:3])[:420], "bullets": len(bullets)})
+        rows.append({"date": m.group(1), "title": m.group(2), "detail": " · ".join(bullets[:3])[:420], "bullets": len(bullets)})
     return rows
 
 
-def network_rows(live):
-    if not live:
-        return []
+def network_rows(live, outdir=None):
+    if not live:  # keep the last probe instead of blanking it
+        prev = (outdir / "network.json") if outdir else None
+        return json.loads(prev.read_text()) if prev and prev.exists() else []
     import netcheck
     out = []
     for name, host, status, lat, note in netcheck.run():
+        if status != "OK":
+            note = ("Server error. Not needed: lite-api.jup.ag is used for Jupiter quotes." if "quote-api" in host
+                    else "Not reachable from this environment.")
         out.append({"check": name, "host": host, "status": status, "latency_s": float(lat.rstrip("s")), "evidence": note[:90]})
     return out
 
@@ -144,6 +170,11 @@ def build(outdir, live_net=True):
     except Exception:
         pass
 
+    summary[0]["downloader_running"] = downloader_running()
+    summary[0]["now_task"], summary[0]["now_title"] = NOW["task"], NOW["title"]
+    summary[0]["now_next"], summary[0]["now_needs"] = NOW["next"], NOW["needs"]
+    bt_path = BASE / "data" / "backtest_last.json"
+    backtest = json.loads(bt_path.read_text()) if bt_path.exists() else []
     files = {
         "summary": summary,
         "tasks": [{"task": t[0], "title": t[1], "status": t[2], "phase": t[3], "note": t[4]} for t in TASKS],
@@ -152,10 +183,11 @@ def build(outdir, live_net=True):
                    "candles": p["n_candles"], "downloaded": bool(p["done"]), "eligible": p["liq_now"] <= MAX_LIQ,
                    "source": ", ".join(json.loads(p["sources"]))} for p in pools],
         "config": rules_rows(cfg),
-        "network": network_rows(live_net),
+        "network": network_rows(live_net, outdir),
         "activity": activity_rows(),
         "history": history_rows(outdir, now, n_done, n_candles, len(elig)),
         "paper": pdb_rows,
+        "backtest": backtest,
     }
     for name, rows in files.items():
         (outdir / f"{name}.json").write_text(json.dumps(rows, separators=(",", ":")))

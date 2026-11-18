@@ -130,7 +130,7 @@ def download_candles(db, days, max_pools=None, max_liq_now=50_000_000):
     now = time.time()
     target = now - (days + 1) * 86400
     # skip blue-chips / implausible reserves (rule fixed before any backtest result); smallest-first would bias, so order by volume
-    pools = db.execute("SELECT * FROM pools WHERE liq_now <= ? ORDER BY vol24_now DESC", (max_liq_now,)).fetchall()
+    pools = db.execute("SELECT * FROM pools WHERE liq_now <= ? ORDER BY (liq_now >= 50000) DESC, vol24_now DESC", (max_liq_now,)).fetchall()
     if max_pools:
         pools = pools[:max_pools]
     for i, pl in enumerate(pools, 1):
