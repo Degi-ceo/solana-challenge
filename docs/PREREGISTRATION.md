@@ -5,7 +5,7 @@ bottom; results may never change what was pre-registered. Rationale and evidence
 
 ## Unit of observation
 A **graduate** is a newly created pool that is not a bonding-curve pool (dex not in `pump-fun`, `meteora-dbc`, `raydium-launchlab`, `moonshot`-curve),
-first seen by the collector within **5 minutes** of `pool_created_at`, with reserve liquidity at first sight of at least **$3,000**.
+first seen by the collector within **10 minutes** of `pool_created_at` (amended from 5, see A2), with reserve liquidity at first sight of at least **$3,000**.
 Late detections and tiny pools are counted and reported, never silently dropped.
 Each graduate carries a classification: `memecoin_confirmed` (vanity mint `...pump` or `...bonk`, or RugCheck launchpad field), `memecoin_probable`
 (launchpad-family dex), `not_memecoin` (liquidity at first sight above $5M), `unknown`. **Analysis population = confirmed + probable.** Other classes are reported separately.
@@ -50,3 +50,11 @@ Detection delay (up to 5 min), GeckoTerminal price quality for thin pools, wash-
 - **2026-11-18 (A1), before any return was computed:** "exit +X h" in the hypothesis table means the **snapshot at pool age X**, not entry + X, because snapshots exist only at the fixed ages.
   Cells therefore are: H1 entry 24 h, exit at age 48 h; H2, H3, H4 entry 15 min, exit at age 6 h; H5 entry 6 h, exit at age 24 h. Only the label changes; no threshold, test or decision rule changes.
   At the time of this amendment the collector had been running for minutes and no analysis had been run.
+- **2026-11-18 (A2), before any return was computed:** maximum detection delay raised from 5 to **10 minutes**. Reason, measured in the first live run (n=22): the data source lists new pools after a median of 214 s
+  (p25 163 s, p75 315 s, max 385 s); a 5-minute limit would have excluded 27% of pools, which is a selection on indexing speed, and every primary entry age (15 min and later) is unaffected by a delay under 10 minutes.
+  Detection delay stays recorded per launch and is reported as a covariate; snapshots at ages 1 and 5 min are exploratory for late-detected pools.
+- **2026-11-18 (A3), before any return was computed:** the unit of analysis is the **first observed pool per token mint**; later pools of the same mint are stored but excluded from every primary count and test
+  (the first live run showed the same token appearing in several pools, which would inflate the sample and correlate observations). Sample progress on the dashboard counts distinct mints.
+  Note recorded for interpretation, not a rule change: several Meteora DAMM v2 pools showed 99.7-99.99% round-trip cost at 5 minutes. A plausible cause is a high launch fee that decays over time (anti-sniper
+  fee scheduler) [open, unverified]; the pre-registered return definition already charges the measured cost at the entry age, so such pools are priced correctly rather than assumed un-sellable.
+

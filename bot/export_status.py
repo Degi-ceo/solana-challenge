@@ -294,7 +294,7 @@ def launch_data():
             for r in q("SELECT age_target_min, COUNT(*) FROM snaps WHERE missed=0 GROUP BY age_target_min ORDER BY age_target_min")]
     prereg = []
     for hid, claim, a, b in PRIMARY_CELLS:
-        n = one("""SELECT COUNT(*) FROM launches l JOIN snaps s1 ON s1.pool=l.pool AND s1.age_target_min=? AND s1.missed=0 AND s1.price>0
+        n = one("""SELECT COUNT(DISTINCT l.mint) FROM launches l JOIN snaps s1 ON s1.pool=l.pool AND s1.age_target_min=? AND s1.missed=0 AND s1.price>0
                    JOIN snaps s2 ON s2.pool=l.pool AND s2.age_target_min=? AND s2.missed IN (0,2)
                    WHERE l.status='observed' AND l.class IN ('memecoin_confirmed','memecoin_probable')""", a, b)
         prereg.append({"id": hid, "claim": claim, "entry_age": a, "exit_age": b, "n": n, "needed": MIN_N, "pct": round(100 * min(1, n / MIN_N))})

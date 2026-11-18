@@ -1,5 +1,22 @@
 # JOURNAL (source of truth between sessions — update every session)
 
+## 2026-11-18 — task 4 done: graduation collector, first live results (bot/launches.py)
+- Built and tested (80 tests passing, 22 new in test_launches.py): GeckoTerminal new_pools polled every ~2 minutes (10 pages), curve pools ignored, tiny (< $3k) and late pools stored with a
+  status, observed pools classified and snapshotted at fixed ages from GeckoTerminal's multi-pool endpoint (price, liquidity, volume, buys/sells, unique traders), Jupiter buy+sell cost probes
+  (quotes only) at ages 5/15/60/360 min for $1 and $2.50, one RugCheck report per launch (insiders, holders excluding the pool's own accounts, LP lock, authorities, Token-2022 extensions).
+  Stream coverage is measured: detection delay per launch and "stream gaps" (polls that do not overlap the previous one).
+- First live run (about 10 minutes, sandbox): 51 new non-curve pools -> 16 observed, 6 late, 29 tiny (57% are spam under $3k). Observed class: 3 confirmed + 7 probable memecoins, 6 unknown.
+  Detection delay (n=22): median 214 s, p25 163, p75 315, max 385; 73% within 300 s. Stream gaps: 0 in 6 polls. 36 cost probes, 16 safety reports.
+- Pre-registration amendment A2 (before any return was computed): max detection delay 5 -> 10 minutes (the 5-minute limit would have excluded 27% by indexing speed). 6 'late' rows re-statused.
+- Cost probes already show what the sell gate catches: round trips of 0.24-0.67% on healthy pools, but 99.75% and 99.9% on a Meteora DAMM v2 pool (buying works, selling returns almost nothing = effectively un-sellable).
+  Safety reports vary a lot: one token had top-10 holders (excluding the pool) at 90.7% with 0% LP locked; another showed 111 insider accounts flagged; others were clean.
+- Throughput estimate: about 60 memecoin graduates per hour (confirmed + probable) observed -> roughly 1,400 per day, so the 300-sample minimum for the entry-15-min cells is reachable in under a day of
+  continuous running; H1 and H5 need 48 h and 24 h of pool age first. The sandbox is ephemeral: the collector must run on the VPS (docs/DEPLOY.md) to accumulate anything that matters.
+- Pre-registration amendment A3: unit = first observed pool per mint (the same token showed up in several pools). Hypothesis [open]: the 99.7-99.99% round-trip costs on some Meteora DAMM v2
+  pools may be a decaying anti-sniper launch fee, not a honeypot; the probe at 15 min and 60 min will show whether the cost falls.
+- Not yet verified: whether late-detected pools differ systematically in outcome (will be reported as a covariate), and GeckoTerminal price quality for thin pools.
+- Next: task 5, the event-study analysis tool exactly as pre-registered, tested on synthetic data first (planted effect, pure noise, below-minimum sample).
+
 ## 2026-11-18 — task 3 done: memecoin classifier (bot/classify.py)
 - Evidence order (first match wins): RugCheck `launchpad.platform` -> confirmed; vanity mint `...pump`/`...bonk` -> confirmed; RugCheck `jup_verified` -> not_memecoin;
   liquidity at first sight > $5M -> not_memecoin; launchpad-family DEX -> probable; else unknown. Every result stores its reason. 10 tests (58 total passing).
