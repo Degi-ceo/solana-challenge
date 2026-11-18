@@ -1,5 +1,10 @@
 # JOURNAL (source of truth between sessions — update every session)
 
+## 2026-11-18 — plan accepted by the user; pre-registration written before any data
+- The user agreed with the re-plan. TASKS.md is revised (classifier -> graduation stream -> event study -> paper execution -> executor -> reporting -> deploy).
+- `docs/PREREGISTRATION.md` fixes the unit (graduate), snapshot ages, return definition, baseline (unconditional graduate set), six primary tests, minimum 300 per cell,
+  Holm correction and the two-week decision rule. It is committed before the stream collector exists, so results cannot shape it.
+
 ## 2026-11-18 — deep research: how the system should work for Solana memecoins (docs/RESEARCH_MEMECOIN_SYSTEM.md)
 - Read four papers from arxiv.org (host allowed by the user): Marino et al. (655,770 tokens created in Sept 2025, 4,338 = 0.63% graduated, threshold about $69k market cap),
   Li et al. (6.4M tokens over 7 months; XGBoost on first 5 minutes, MCC about 0.36-0.39, authors say not deployable), MELT (41k+ launches; 36.5% of supply held by coordinated accounts;
