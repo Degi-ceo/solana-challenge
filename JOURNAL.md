@@ -1,5 +1,16 @@
 # JOURNAL (source of truth between sessions — update every session)
 
+## 2026-11-18 — task 3 done: memecoin classifier (bot/classify.py)
+- Evidence order (first match wins): RugCheck `launchpad.platform` -> confirmed; vanity mint `...pump`/`...bonk` -> confirmed; RugCheck `jup_verified` -> not_memecoin;
+  liquidity at first sight > $5M -> not_memecoin; launchpad-family DEX -> probable; else unknown. Every result stores its reason. 10 tests (58 total passing).
+- Verified on real RugCheck reports: `launchpad.platform` is pump_fun / meteora_dbc / raydium_launchlab / stonk_fun; stocks and majors have `jup_verified = true`.
+  GeckoTerminal's dex label is unreliable: all 34 pools labelled `moonshot` are Meteora DBC tokens per RugCheck.
+- Applied to the 211 stored pools (187 distinct mints, 0 RugCheck failures): eligible (<= $50M) 156 -> memecoin_confirmed 74, not_memecoin 63, unknown 19
+  (confirmed by platform: Meteora DBC 34, pump.fun 28, LaunchLab 5, stonk.fun 7 across all 211). The earlier launchpad-DEX proxy (63 pools) was close in size but not in membership.
+  The 19 unknown are mostly Raydium AMM pools with meme-like names (GREENDILDO, HWAN, PHILCOIN, MEOW): they stay outside the analysis population by the pre-registration and are reported.
+- Token age: RugCheck `detectedAt` is NOT the launch time (median equals pool creation; p75 49 h later than pool creation), so token launch time stays [open]. Pool age = time since graduation is what is measured.
+- Table `pool_class` added to data/market.db (gitignored). Next: task 4, the graduation stream and fixed-age snapshots.
+
 ## 2026-11-18 — plan accepted by the user; pre-registration written before any data
 - The user agreed with the re-plan. TASKS.md is revised (classifier -> graduation stream -> event study -> paper execution -> executor -> reporting -> deploy).
 - `docs/PREREGISTRATION.md` fixes the unit (graduate), snapshot ages, return definition, baseline (unconditional graduate set), six primary tests, minimum 300 per cell,
