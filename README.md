@@ -15,4 +15,4 @@ Quick check: `cd bot && python3 -m unittest -v test_bot` (12 tests), `python3 bo
 
 Setup for Claude Code web: push this folder to a **private** GitHub repo, open it in Claude Code on the web, and in the environment settings
 allow network access to `api.dexscreener.com`, `api.geckoterminal.com`, `api.mainnet-beta.solana.com`, `quote-api.jup.ag`,
-`lite-api.jup.ag`, `api.rugcheck.xyz`. Never commit keys; `.gitignore` already excludes databases and key files.
+`lite-api.jup.ag`, `api.jup.ag`, `api.rugcheck.xyz`. Never commit keys; `.gitignore` already excludes databases and key files.
