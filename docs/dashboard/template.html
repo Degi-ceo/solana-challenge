@@ -1,0 +1,756 @@
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>Solana Paper Bot</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
+<style>
+  /* Layout: sticky status bar + four tabs. Each tab is a single column on a phone and a two-column grid from 860px.
+     One card style, one accent, status = dot/icon + word. */
+  :root {
+    --bg: #fcfcfb; --card: #ffffff; --ink: #0b0b0b; --ink2: #52514e; --ink3: #6b6a66; --line: #e6e5e0; --wash: #f4f3f0;
+    --accent: #2a78d6; --accent-track: #cde2fb; --mute-bar: #8f8e87;
+    --good: #0ca30c; --warn: #fab219; --bad: #d03b3b;
+    --font: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+    --bg: #1a1a19; --card: #222221; --ink: #f0efec; --ink2: #c3c2b7; --ink3: #a2a196; --line: #383835; --wash: #2a2a28;
+    --accent: #3987e5; --accent-track: #0d366b; --mute-bar: #6b6a64; color-scheme: dark; } }
+  :root[data-theme="dark"] {
+    --bg: #1a1a19; --card: #222221; --ink: #f0efec; --ink2: #c3c2b7; --ink3: #a2a196; --line: #383835; --wash: #2a2a28;
+    --accent: #3987e5; --accent-track: #0d366b; --mute-bar: #6b6a64; color-scheme: dark; }
+
+  * { box-sizing: border-box; }
+  body { background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 15px; line-height: 1.5; margin: 0; }
+  h1, h2, h3, p, ul, ol, dl, dd { margin: 0; padding: 0; }
+  ul, ol { list-style: none; }
+  .wrap { max-width: 1120px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  .small { font-size: 13px; color: var(--ink2); }
+  .eyebrow { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink3); font-weight: 500; }
+  a { color: var(--accent); }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+
+  /* ---- top bar ---- */
+  .top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20; background: var(--bg); border-bottom: 1px solid var(--line); }
+  body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); background: var(--bg); z-index: 30; }
+  .top-in { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding-top: 12px; padding-bottom: 10px; }
+  .brand { font-weight: 600; font-size: 16px; margin-right: auto; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px 8px; }
+  .chip { display: inline-flex; align-items: center; gap: 7px; min-height: 28px; padding: 2px 11px; border: 1px solid var(--line); border-radius: 999px; font-size: 13px; background: var(--card); white-space: nowrap; }
+  .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--ink3); flex: none; }
+  .dot.good { background: var(--good); } .dot.warn { background: var(--warn); } .dot.bad { background: var(--bad); }
+  .tabs { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; padding-bottom: 0; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab { appearance: none; background: none; border: 0; border-bottom: 2px solid transparent; color: var(--ink2); font: inherit; font-weight: 500; padding: 10px 14px; min-height: 44px; cursor: pointer; white-space: nowrap; }
+  .tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+  .tab:hover { color: var(--ink); }
+  @media (max-width: 520px) { .tabs { gap: 0; } .tab { flex: 1 1 auto; padding: 10px 8px; font-size: 14px; } }
+
+  main { padding-top: 24px; padding-bottom: 56px; }
+  .panel[hidden] { display: none; }
+  .stack { display: flex; flex-direction: column; gap: 20px; }
+  .grid2 { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; align-items: start; }
+  @media (min-width: 860px) { .grid2 { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); } .grid2.even { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+  .card h2 { font-size: 17px; font-weight: 600; line-height: 1.3; }
+  .card h3 { font-size: 15px; font-weight: 600; }
+  .head { display: flex; flex-direction: column; gap: 4px; }
+
+  /* ---- right-now ---- */
+  .now-title { font-size: 22px; font-weight: 600; line-height: 1.25; text-wrap: balance; }
+  .needs { display: flex; flex-direction: column; gap: 10px; }
+  .needs .big { font-size: 17px; font-weight: 600; }
+
+  /* ---- meter ---- */
+  .meter { height: 10px; border-radius: 5px; background: var(--accent-track); overflow: hidden; }
+  .meter > i { display: block; height: 100%; background: var(--accent); border-radius: 5px; min-width: 2px; }
+  .meter-row { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; color: var(--ink2); flex-wrap: wrap; }
+
+  /* ---- figures ---- */
+  .figs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  @media (min-width: 860px) { .figs { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+  .figs.five { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  @media (min-width: 900px) { .figs.five { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+  .figs.five .fig:last-child { grid-column: 1 / -1; } @media (min-width: 900px) { .figs.five .fig:last-child { grid-column: auto; } }
+  .fig { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .fig .v { font-size: 32px; font-weight: 600; line-height: 1.15; letter-spacing: -.01em; }
+  .fig .l { font-size: 14px; font-weight: 500; }
+  .fig .s { font-size: 13px; color: var(--ink2); }
+
+  /* ---- criteria / lists ---- */
+  .rows > li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 16px; padding: 12px 0; border-top: 1px solid var(--line); align-items: baseline; }
+  .rows > li:first-child { border-top: 0; padding-top: 0; }
+  .rows .nm { font-weight: 500; }
+  .rows .ds { grid-column: 1; font-size: 13px; color: var(--ink2); }
+  .rows .val { grid-column: 2; grid-row: 1; font-weight: 600; text-align: right; white-space: nowrap; }
+  .rows .val small { font-weight: 400; color: var(--ink2); font-size: 13px; }
+
+  .plan > li { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 2px 12px; padding: 12px 0; border-top: 1px solid var(--line); align-items: start; }
+  .plan > li:first-child { border-top: 0; padding-top: 0; }
+  .plan .ic { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 600; border: 1.5px solid var(--ink3); color: var(--ink2); }
+  .plan .done .ic { background: var(--good); border-color: var(--good); color: #fff; }
+  .plan .active .ic { border-color: var(--accent); color: var(--accent); background: var(--accent-track); }
+  .plan .t { font-weight: 500; }
+  .plan .n { font-size: 13px; color: var(--ink2); }
+  .plan .st { font-size: 13px; color: var(--ink2); white-space: nowrap; }
+  @media (max-width: 520px) { .plan > li { grid-template-columns: 28px minmax(0, 1fr); } .plan .st { grid-column: 2; } }
+
+  /* ---- bars ---- */
+  .bars { display: flex; flex-direction: column; gap: 12px; }
+  .bar { display: grid; grid-template-columns: minmax(96px, 150px) minmax(0, 1fr) auto; gap: 4px 12px; align-items: center; font-size: 14px; }
+  .bar .trk { height: 16px; }
+  .bar .fill { height: 100%; background: var(--accent); border-radius: 0 4px 4px 0; min-width: 2px; }
+  .bar .fill.mute { background: var(--mute-bar); } .bar .fill.bad { background: var(--bad); }
+  .bar .v { font-weight: 600; min-width: 3ch; text-align: right; }
+  .bar .lb small { display: block; color: var(--ink2); font-size: 12px; line-height: 1.3; }
+  @media (max-width: 520px) { .bar { grid-template-columns: minmax(0, 1fr) auto; } .bar .trk { grid-column: 1 / -1; grid-row: 2; } }
+
+  details.tv { border-top: 1px solid var(--line); padding-top: 10px; }
+  details.tv summary::before { content: "\25B8"; margin-right: 8px; font-size: 11px; }
+  details.tv[open] summary::before { content: "\25BE"; }
+  details.tv summary { cursor: pointer; font-size: 13px; color: var(--ink2); min-height: 28px; display: flex; align-items: center; }
+  details.tv table { margin-top: 8px; }
+
+  /* ---- tables that become cards on phones ---- */
+  .scroll { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { text-align: left; padding: 10px 14px 10px 0; border-top: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink3); font-weight: 500; border-top: 0; white-space: nowrap; }
+  th button { all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; min-height: 28px; }
+  th button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  td.r, th.r { text-align: right; }
+  td.r.num { padding-right: 18px; } th.r { padding-right: 18px; }
+  td.num { font-variant-numeric: tabular-nums; }
+  @media (max-width: 640px) {
+    table.cards thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+    table.cards, table.cards tbody { display: block; width: 100%; }
+    table.cards tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 16px; border-top: 1px solid var(--line); padding: 12px 0; }
+    table.cards td { border: 0; padding: 0; display: block; text-align: left; min-width: 0; }
+    table.cards td::before { content: attr(data-label); display: block; color: var(--ink2); font-size: 12px; }
+    table.cards td:first-child, table.cards td:last-child { grid-column: 1 / -1; }
+    table.cards td:first-child { font-weight: 600; } table.cards td:first-child::before { display: none; }
+    table.cards td.r { text-align: left; padding-right: 0; }
+  }
+
+  .controls { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  @media (min-width: 640px) { .controls { grid-template-columns: minmax(0, 2fr) repeat(3, minmax(0, 1fr)); } }
+  .controls label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--ink2); }
+  .controls input, .controls select { font: inherit; font-size: 15px; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 0 10px; min-height: 44px; width: 100%; }
+  .btn { font: inherit; font-weight: 500; color: var(--ink); background: var(--wash); border: 1px solid var(--line); border-radius: 8px; min-height: 44px; padding: 0 16px; cursor: pointer; align-self: flex-start; }
+  .btn:hover { border-color: var(--ink3); }
+
+  .flow { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; counter-reset: s; }
+  @media (min-width: 700px) { .flow { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  .flow > li { border: 1px solid var(--line); border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 6px; background: var(--card); }
+  .flow .sn { font-size: 12px; color: var(--ink3); font-weight: 600; letter-spacing: .06em; }
+  .flow .tag { margin-top: auto; padding-top: 4px; font-size: 13px; color: var(--ink2); display: flex; align-items: center; gap: 7px; }
+
+  .timeline > li { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 2px 16px; padding: 14px 0; border-top: 1px solid var(--line); }
+  .timeline > li:first-child { border-top: 0; padding-top: 0; }
+  .timeline .when { font-size: 13px; color: var(--ink2); }
+  @media (max-width: 560px) { .timeline > li { grid-template-columns: minmax(0, 1fr); } }
+  .rows.stackv > li { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  .rows.stackv .val { grid-column: 1; grid-row: auto; text-align: left; white-space: normal; font-size: 17px; }
+  .rows.stackv .ds { font-size: 14px; }
+  .finding { border-color: var(--warn); }
+  .finding .head h2 { font-size: 20px; }
+  .gates > li { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; gap: 2px 10px; padding: 10px 0; border-top: 1px solid var(--line); align-items: start; }
+  .gates > li:first-child { border-top: 0; padding-top: 0; }
+  .gi { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 700; border: 1.5px solid var(--ink3); color: var(--ink2); margin-top: 2px; }
+  .gi.pass { background: var(--good); border-color: var(--good); color: #fff; } .gi.fail { background: var(--bad); border-color: var(--bad); color: #fff; }
+  .gates .gt { font-weight: 500; } .gates .gd { font-size: 13px; color: var(--ink2); } .gates .gs { font-size: 13px; color: var(--ink2); white-space: nowrap; }
+  @media (max-width: 520px) { .gates > li { grid-template-columns: 26px minmax(0, 1fr); } .gates .gs { grid-column: 2; } }
+  .chartbox { position: relative; }
+  .chartbox svg { display: block; width: 100%; height: auto; overflow: visible; }
+  .chartbox svg text { fill: var(--ink2); font-size: 12px; font-family: var(--font); }
+  .tip { position: absolute; pointer-events: none; z-index: 5; background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 13px; line-height: 1.4; box-shadow: 0 4px 16px rgba(0,0,0,.18); white-space: nowrap; }
+  .tip b { font-weight: 600; }
+  .kv { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+  .kv > div { border: 1px solid var(--line); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 2px; }
+  .kv .k { font-size: 13px; color: var(--ink2); } .kv .v { font-size: 22px; font-weight: 600; line-height: 1.2; } .kv .n { font-size: 12px; color: var(--ink2); }
+  .callout { border-left: 3px solid var(--accent); background: var(--wash); border-radius: 0 8px 8px 0; padding: 12px 14px; font-size: 14px; }
+  .csv { width: 100%; min-height: 110px; font: 12px/1.4 ui-monospace, Menlo, monospace; background: var(--wash); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
+  .row-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
+  dl.gl { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  @media (min-width: 760px) { dl.gl { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 28px; } }
+  dl.gl dt { font-weight: 600; } dl.gl dd { font-size: 14px; color: var(--ink2); }
+  .empty { border: 1px dashed var(--line); border-radius: 10px; padding: 16px; color: var(--ink2); font-size: 14px; }
+  .stale { color: var(--ink); }
+  @media (prefers-reduced-motion: no-preference) { .meter > i { transition: width .4s ease; } }
+  @media print { .top { position: static; } .panel[hidden] { display: block; } }
+</style>
+
+<script type="application/json" id="snap">/*__DATA__*/</script>
+
+<header class="top">
+  <div class="wrap top-in">
+    <span class="brand">Solana $5 · paper bot</span>
+    <div class="chips" id="chips" role="status" aria-label="Safety state"></div>
+  </div>
+  <div class="wrap"><div class="tabs" role="tablist" aria-label="Sections" id="tabs"></div></div>
+</header>
+
+<main class="wrap">
+  <section class="panel" id="p-overview" role="tabpanel" aria-labelledby="t-overview">
+    <div class="stack">
+      <div class="card finding" id="finding" hidden></div>
+      <div class="grid2">
+        <div class="card" id="now"></div>
+        <div class="card needs" id="needs"></div>
+      </div>
+      <div class="figs five" id="figs"></div>
+      <div class="grid2 even">
+        <div class="stack"><div class="card" id="verdict"></div><div class="card" id="risk"></div></div>
+        <div class="card" id="plan"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel" id="p-strategy" role="tabpanel" aria-labelledby="t-strategy" hidden>
+    <div class="stack">
+      <div class="card" id="prereg"></div>
+      <div class="card" id="backtest"></div>
+      <div class="card" id="trade"></div>
+      <div class="grid2 even">
+        <div class="card" id="rejects"></div>
+        <div class="card" id="ready"></div>
+      </div>
+      <div class="card" id="watch"></div>
+    </div>
+  </section>
+
+  <section class="panel" id="p-data" role="tabpanel" aria-labelledby="t-data" hidden>
+    <div class="stack">
+      <div class="grid2 even">
+        <div class="card" id="coverage"></div>
+        <div class="card" id="funnel"></div>
+      </div>
+      <div class="grid2 even">
+        <div class="card" id="bands"></div>
+        <div class="card" id="quality"></div>
+      </div>
+      <div class="card" id="stream"></div>
+      <div class="card" id="srcmix"></div>
+      <div class="card" id="explorer"></div>
+    </div>
+  </section>
+
+  <section class="panel" id="p-rules" role="tabpanel" aria-labelledby="t-rules" hidden>
+    <div class="stack">
+      <div class="card" id="pipeline"></div>
+      <div class="grid2 even" id="rulegroups"></div>
+    </div>
+  </section>
+
+  <section class="panel" id="p-log" role="tabpanel" aria-labelledby="t-log" hidden>
+    <div class="stack">
+      <div class="card" id="sources"></div>
+      <div class="card" id="journal"></div>
+      <div class="card" id="glossary"></div>
+      <div class="card" id="limits"></div>
+    </div>
+  </section>
+</main>
+
+<script>
+(function () {
+  var D = JSON.parse(document.getElementById('snap').textContent);
+  var S = D.summary[0], pools = D.pools, cfg = {}, cfgRows = D.config;
+  cfgRows.forEach(function (r) { cfg[r.key] = r.value; });
+  var $ = function (id) { return document.getElementById(id); };
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+  function add(parent) { for (var i = 1; i < arguments.length; i++) if (arguments[i]) parent.appendChild(arguments[i]); return parent; }
+  var fInt = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
+  var money = function (v, d) { return (v < 0 ? '-' : '') + '$' + Math.abs(v).toFixed(d === undefined ? 2 : d); };
+  var compact = function (v) { return v >= 1e9 ? '$' + (v / 1e9).toFixed(1) + 'B' : v >= 1e6 ? '$' + (v / 1e6).toFixed(1) + 'M' : v >= 1e3 ? '$' + Math.round(v / 1e3) + 'k' : '$' + Math.round(v); };
+  function dot(kind) { return el('span', 'dot ' + (kind || '')); }
+  function chip(kind, label) { var c = el('span', 'chip'); add(c, dot(kind), document.createTextNode(label)); return c; }
+  function head(card, eyebrow, title, sub) {
+    var h = el('div', 'head'); if (eyebrow) add(h, el('p', 'eyebrow', eyebrow)); add(h, el('h2', '', title)); if (sub) add(h, el('p', 'small', sub)); card.appendChild(h);
+  }
+  function meter(pct, label) {
+    var m = el('div', 'meter'); m.setAttribute('role', 'progressbar'); m.setAttribute('aria-valuemin', '0'); m.setAttribute('aria-valuemax', '100');
+    m.setAttribute('aria-valuenow', String(Math.round(pct))); m.setAttribute('aria-label', label);
+    var i = el('i'); i.style.width = Math.max(0, Math.min(100, pct)) + '%'; m.appendChild(i); return m;
+  }
+  function tableView(cols, rows) {
+    var d = el('details', 'tv'); add(d, el('summary', '', 'Table view'));
+    var t = el('table'), th = el('thead'), tr = el('tr'); cols.forEach(function (c) { add(tr, el('th', '', c)); }); add(th, tr); add(t, th);
+    var tb = el('tbody'); rows.forEach(function (r) { var x = el('tr'); r.forEach(function (c) { add(x, el('td', 'num', String(c))); }); add(tb, x); }); add(t, tb);
+    add(d, add(el('div', 'scroll'), t)); return d;
+  }
+
+  /* ---------- derived numbers ---------- */
+  var ageSec = Math.max(0, Date.now() / 1000 - S.updated_ts), ageMin = Math.round(ageSec / 60);
+  var ageTxt = ageMin < 1 ? 'just now' : ageMin < 90 ? ageMin + ' min ago' : ageMin < 1440 ? Math.round(ageMin / 60) + ' h ago' : Math.round(ageMin / 1440) + ' d ago';
+  var stale = ageSec > 2 * 3600;
+  var elig = pools.filter(function (p) { return p.eligible; });
+  var done = S.pools_downloaded, total = S.pools_eligible, pct = 100 * done / Math.max(1, total);
+  var minAge = cfg.min_age_h / 24, maxAge = cfg.max_age_h / 24, floor = cfg.min_liq_usd;
+  var inAge = elig.filter(function (p) { return p.age_days >= minAge && p.age_days <= maxAge; });
+  var inLiq = inAge.filter(function (p) { return p.liq_now_usd >= floor; });
+  var ready = inLiq.filter(function (p) { return p.downloaded; });
+  var hist = D.history, eta = null;
+  if (hist.length >= 2) {
+    var a = hist[0], b = hist[hist.length - 1], dt = (b.ts - a.ts) / 60, dd = b.pools_done - a.pools_done;
+    if (dt > 3 && dd > 0) eta = Math.round((total - b.pools_done) / (dd / dt));
+  }
+  var etaTxt = done >= total ? 'complete' : (!S.downloader_running ? 'download paused' : eta === null ? 'estimating time left' : eta < 2 ? 'under 2 min left' : eta < 90 ? 'about ' + eta + ' min left' : 'about ' + (eta / 60).toFixed(1) + ' h left');
+
+  /* ---------- top bar ---------- */
+  var chips = $('chips');
+  add(chips, chip('good', 'Paper only'), chip(S.live_trading ? 'bad' : 'good', S.live_trading ? 'Live trading ON' : 'Live trading off'),
+    chip(S.kill_file ? 'warn' : 'good', S.kill_file ? 'Kill switch on' : 'Kill switch off'),
+    chip(stale ? 'warn' : '', 'Snapshot ' + ageTxt));
+
+  /* ---------- tabs ---------- */
+  var TABS = [['overview', 'Overview'], ['strategy', 'Strategy'], ['data', 'Data'], ['rules', 'Rules'], ['log', 'Log']];
+  var tabs = $('tabs');
+  TABS.forEach(function (t, i) {
+    var b = el('button', 'tab', t[1]); b.id = 't-' + t[0]; b.setAttribute('role', 'tab'); b.setAttribute('aria-controls', 'p-' + t[0]); b.dataset.k = t[0];
+    b.onclick = function () { show(t[0], true); };
+    b.onkeydown = function (e) {
+      var n = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0; if (!n) return;
+      var j = (i + n + TABS.length) % TABS.length; show(TABS[j][0], true); $('t-' + TABS[j][0]).focus(); e.preventDefault();
+    };
+    tabs.appendChild(b);
+  });
+  function show(k, push) {
+    if (!TABS.some(function (t) { return t[0] === k; })) k = 'overview';
+    TABS.forEach(function (t) { var on = t[0] === k; $('p-' + t[0]).hidden = !on; var b = $('t-' + t[0]); b.setAttribute('aria-selected', on ? 'true' : 'false'); b.tabIndex = on ? 0 : -1; });
+    if (push && location.hash !== '#' + k) { try { history.replaceState(null, '', '#' + k); } catch (e) { location.hash = k; } }
+    if (k === 'strategy' && typeof drawPayoff === 'function') drawPayoff();
+    window.scrollTo(0, 0);
+  }
+  window.addEventListener('hashchange', function () { show(location.hash.slice(1)); });
+
+  /* ---------- overview: right now ---------- */
+  var now = $('now');
+  head(now, 'Right now', S.now_title);
+  add(now, meter(pct, 'History downloaded'));
+  add(now, add(el('div', 'meter-row'), el('span', '', fInt.format(done) + ' of ' + fInt.format(total) + ' pools'), el('span', '', etaTxt)));
+  add(now, add(el('p', 'small'), el('b', '', 'Next: '), document.createTextNode(S.now_next)));
+
+  try {
+    var prev = JSON.parse(localStorage.getItem('bm-last') || 'null');
+    if (prev && prev.updated_ts !== S.updated_ts) {
+      var dp = done - prev.done, dc = S.candles_stored - prev.candles, dt = nDoneTasks() - prev.tasks;
+      add(now, add(el('p', 'small'), el('b', '', 'Since your last visit: '), document.createTextNode((dp >= 0 ? '+' : '') + dp + ' pools downloaded, ' + (dc >= 0 ? '+' : '') + fInt.format(dc) + ' candles, ' + (dt >= 0 ? '+' : '') + dt + ' tasks finished.')));
+    }
+    localStorage.setItem('bm-last', JSON.stringify({ updated_ts: S.updated_ts, done: done, candles: S.candles_stored, tasks: nDoneTasks() }));
+  } catch (e) { /* storage unavailable: skip */ }
+  function nDoneTasks() { return D.tasks.filter(function (t) { return t.status === 'done'; }).length; }
+
+  var needs = $('needs');
+  add(needs, el('p', 'eyebrow', 'Needs from you'));
+  if (S.now_needs && S.now_needs.length) {
+    add(needs, el('p', 'big', S.now_needs.length === 1 ? 'One thing' : S.now_needs.length + ' things'));
+    var ul = el('ul', 'rows'); S.now_needs.forEach(function (n) { add(ul, add(el('li'), el('span', 'nm', n))); }); add(needs, ul);
+  } else {
+    add(needs, el('p', 'big', 'Nothing'));
+    add(needs, el('p', 'small', 'The work plan continues on its own. This box lists anything that is blocked or needs your decision.'));
+  }
+  add(needs, el('p', 'small', 'Page last refreshed ' + S.updated + ' (' + ageTxt + '). It is a snapshot, not a live stream.'));
+
+  /* ---------- overview: figures ---------- */
+  var tr = S.paper_trades, figs = $('figs');
+  [['Equity', money(S.bankroll_usd), 'Started with ' + money(S.bankroll_usd)], ['Paper profit / loss', tr ? '' : '\u2014', tr ? '' : 'No trades yet'],
+   ['Paper trades', fInt.format(tr), 'Verdict needs ' + cfg.min_closed_trades], ['Challenge clock', S.run_started ? 'Day 1' : 'Day 0', S.run_started ? 'of ' + S.paper_days_total : 'Paper run not started \u00b7 7 days once it starts'],
+   ['SOL price', S.sol_usd ? '$' + S.sol_usd.toFixed(2) : '\u2014', 'Jupiter quote at snapshot']
+  ].forEach(function (f) { add(figs, add(el('div', 'fig'), el('span', 'l', f[0]), el('span', 'v', f[1]), el('span', 's', f[2]))); });
+
+  /* ---------- overview: verdict ---------- */
+  var vd = $('verdict');
+  head(vd, 'Go / no-go', 'Not enough data yet', 'The verdict is decided by code from these limits, never by hand. It stays "not enough data" until the trade count is reached.');
+  var vl = el('ul', 'rows');
+  [['Closed paper trades', tr + ' of ' + cfg.min_closed_trades, 'Below this, any result is noise.'],
+   ['Profit factor', '— (needs ' + cfg.min_profit_factor + ' or more)', 'Gross wins divided by gross losses, after costs.'],
+   ['Net profit after costs', '— (needs above ' + money(cfg.min_net_pnl_usd) + ')', 'Fees, slippage and network fees included.']
+  ].forEach(function (r) { var li = el('li'); add(li, el('span', 'nm', r[0]), el('span', 'val', r[1]), el('span', 'ds', r[2])); add(vl, li); });
+  add(vd, vl);
+
+  /* ---------- overview: hard limits ---------- */
+  var rk = $('risk'); head(rk, 'Hard limits', 'What can never be exceeded', 'Enforced in code, so a bad day cannot drain the wallet.');
+  var rl = el('ul', 'rows');
+  [['Bankroll', money(S.bankroll_usd), 'The whole experiment.'], ['Position size', money(S.position_usd), 'Per trade.'], ['Open positions', String(S.max_open), 'At most this many at once.'],
+   ['Daily loss limit', money(S.daily_loss_limit_usd), 'New entries stop for the day beyond this.'], ['Live trading', S.live_trading ? 'ON' : 'OFF', 'Only you can change this, and never from this environment.']
+  ].forEach(function (r) { add(rl, add(el('li'), el('span', 'nm', r[0]), el('span', 'val', r[1]), el('span', 'ds', r[2]))); });
+  add(rk, rl);
+
+  /* ---------- overview: plan ---------- */
+  var pl = $('plan'), nDone = D.tasks.filter(function (t) { return t.status === 'done'; }).length;
+  head(pl, 'Work plan', nDone + ' of ' + D.tasks.length + ' tasks finished');
+  var pul = el('ul', 'plan');
+  D.tasks.forEach(function (t) {
+    var li = el('li', t.status); add(li, el('span', 'ic', t.status === 'done' ? '✓' : String(t.task)), add(el('div'), el('p', 't', t.title), el('p', 'n', t.note)),
+      el('span', 'st', t.status === 'done' ? 'Done' : t.status === 'active' ? 'In progress' : 'Planned')); add(pul, li);
+  });
+  add(pl, pul);
+
+  /* ---------- data: coverage ---------- */
+  var cv = $('coverage');
+  head(cv, 'Price history', Math.round(pct) + '% downloaded', 'Candles arrive at one request every 5 seconds, the safe rate for the free data source.');
+  add(cv, meter(pct, 'History downloaded'));
+  add(cv, add(el('div', 'meter-row'), el('span', '', fInt.format(done) + ' of ' + fInt.format(total) + ' pools'), el('span', '', etaTxt)));
+  var cl = el('ul', 'rows');
+  [['5-minute candles stored', fInt.format(S.candles_stored)], ['Download', S.downloader_running ? 'Running' : done >= total ? 'Finished' : 'Not running'], ['Snapshot taken', S.updated]]
+    .forEach(function (r) { add(cl, add(el('li'), el('span', 'nm', r[0]), el('span', 'val', r[1]))); });
+  add(cv, cl);
+
+  /* ---------- data: funnel ---------- */
+  function bars(items, max, fmt) {
+    var w = el('div', 'bars');
+    items.forEach(function (it) {
+      var b = el('div', 'bar'), lb = el('div', 'lb', it.label); if (it.sub) add(lb, el('small', '', it.sub));
+      var trk = el('div', 'trk'), f = el('div', 'fill' + (it.kind ? ' ' + it.kind : '')); f.style.width = (100 * it.value / (max > 0 ? max : 1)) + '%'; add(trk, f);
+      add(b, lb, trk, el('span', 'v', fmt ? fmt(it.value) : fInt.format(it.value))); add(w, b);
+    });
+    return w;
+  }
+  var fn = $('funnel');
+  head(fn, 'Candidate funnel', fInt.format(ready.length) + ' pools are ready to backtest', 'How many pools survive each rule, using today\'s liquidity.');
+  var fItems = [
+    { label: 'Pools found', value: S.pools_found, sub: 'GeckoTerminal listings' },
+    { label: 'Eligible', value: elig.length, sub: 'liquidity at or below ' + compact(cfg.max_liq_now_usd) },
+    { label: 'In the age window', value: inAge.length, sub: minAge + ' to ' + maxAge + ' days old' },
+    { label: 'Above liquidity floor', value: inLiq.length, sub: compact(floor) + ' or more' },
+    { label: 'History downloaded', value: ready.length, sub: 'ready for the backtest' }];
+  add(fn, bars(fItems, S.pools_found), tableView(['Step', 'Pools'], fItems.map(function (i) { return [i.label, i.value]; })));
+
+  /* ---------- data: liquidity bands ---------- */
+  var bd = $('bands');
+  head(bd, 'Liquidity', 'How deep the pools are', 'Pools per liquidity band. Red marks pools excluded as blue-chips or bad data.');
+  var edges = [[0, 5e4, 'Under $50k'], [5e4, 2.5e5, '$50k to $250k'], [2.5e5, 1e6, '$250k to $1M'], [1e6, 5e6, '$1M to $5M'], [5e6, 5e7, '$5M to $50M']];
+  var bItems = edges.map(function (e) { return { label: e[2], value: elig.filter(function (p) { return p.liq_now_usd >= e[0] && p.liq_now_usd < e[1]; }).length, kind: e[0] >= floor ? '' : 'mute' }; });
+  bItems.push({ label: 'Over $50M', value: pools.length - elig.length, kind: 'bad', sub: 'excluded' });
+  add(bd, bars(bItems, Math.max.apply(null, bItems.map(function (i) { return i.value; }))), el('p', 'small', 'Blue bars meet the liquidity floor; grey bars fall below it.'),
+    tableView(['Band', 'Pools'], bItems.map(function (i) { return [i.label, i.value]; })));
+
+  /* ---------- data: explorer ---------- */
+  var ex = $('explorer'); head(ex, 'Pool explorer', 'Every pool the bot knows about');
+  var state = { q: '', dex: '', st: 'elig', sort: 'liq', dir: -1, n: 15 };
+  var dexes = Array.from(new Set(pools.map(function (p) { return p.dex; }))).sort();
+  var ctr = el('div', 'controls');
+  function field(label, node) { var l = el('label'); add(l, el('span', '', label), node); return l; }
+  var q = el('input'); q.type = 'search'; q.id = 'f-q'; q.placeholder = 'Name or exchange';
+  var sd = el('select'); sd.id = 'f-dex'; add(sd, new Option('All exchanges', '')); dexes.forEach(function (d) { add(sd, new Option(d, d)); });
+  var ss = el('select'); ss.id = 'f-st'; [['elig', 'Eligible pools'], ['', 'All pools'], ['ready', 'History downloaded'], ['waiting', 'Waiting for history'], ['excluded', 'Excluded (blue-chips)']].forEach(function (o) { add(ss, new Option(o[1], o[0])); });
+  ss.value = 'elig';
+  var so = el('select'); so.id = 'f-sort'; [['liq', 'Liquidity'], ['age', 'Age'], ['name', 'Name'], ['dex', 'Exchange']].forEach(function (o) { add(so, new Option(o[1], o[0])); });
+  add(ctr, field('Search', q), field('Exchange', sd), field('Show', ss), field('Sort by', so)); add(ex, ctr);
+  var tw = el('div', 'scroll'), tbl = el('table', 'cards'), thead = el('thead'), htr = el('tr');
+  [['name', 'Pool', ''], ['dex', 'Exchange', ''], ['age', 'Age', 'r'], ['liq', 'Liquidity', 'r'], ['st', 'History', '']].forEach(function (c) {
+    var th = el('th', c[2]); th.scope = 'col'; var b = el('button', '', c[1]); b.type = 'button';
+    b.onclick = function () { if (c[0] === 'st') return; state.dir = state.sort === c[0] ? -state.dir : (c[0] === 'name' || c[0] === 'dex' ? 1 : -1); state.sort = c[0]; so.value = c[0]; draw(); };
+    add(th, b); add(htr, th);
+  });
+  add(thead, htr); var tbody = el('tbody'); add(tbl, thead, tbody); add(tw, tbl); add(ex, tw);
+  var cnt = el('p', 'small'); var more = el('button', 'btn', 'Show more'); more.type = 'button'; more.onclick = function () { state.n += 25; draw(); };
+  var exAct = add(el('div', 'row-actions'), more); exAct.appendChild(csvButton(ex, function () { return csvOf([['name', 'pool'], ['dex', 'exchange'], ['age_days', 'age_days'], ['liq_now_usd', 'liquidity_usd'], ['downloaded', 'history_downloaded'], ['eligible', 'eligible']], pools); }));
+  add(ex, cnt, exAct);
+  function pState(p) { return !p.eligible ? 'excluded' : p.downloaded ? 'ready' : 'waiting'; }
+  function draw() {
+    var rows = pools.filter(function (p) {
+      return (!state.dex || p.dex === state.dex) && (!state.st || (state.st === 'elig' ? p.eligible : pState(p) === state.st)) && (!state.q || (p.name + ' ' + p.dex).toLowerCase().indexOf(state.q) >= 0);
+    }).sort(function (a, b) {
+      var k = state.sort, x = k === 'liq' ? a.liq_now_usd : k === 'age' ? a.age_days : a[k], y = k === 'liq' ? b.liq_now_usd : k === 'age' ? b.age_days : b[k];
+      return (typeof x === 'string' ? x.localeCompare(y) : x - y) * state.dir;
+    });
+    tbody.replaceChildren();
+    rows.slice(0, state.n).forEach(function (p) {
+      var s = pState(p), tr = el('tr');
+      function td(label, txt, cls) { var c = el('td', cls || '', txt); c.dataset.label = label; return c; }
+      var st = td('History', '', ''); add(st, dot(s === 'ready' ? 'good' : s === 'excluded' ? 'bad' : 'warn'), document.createTextNode(' ' + (s === 'ready' ? 'Downloaded' : s === 'excluded' ? 'Excluded' : 'Waiting')));
+      st.style.gap = '6px'; st.style.alignItems = 'center';
+      add(tr, td('Pool', p.name), td('Exchange', p.dex), td('Age', p.age_days + ' d', 'r num'), td('Liquidity', compact(p.liq_now_usd), 'r num'), st); add(tbody, tr);
+    });
+    if (!rows.length) { var e = el('tr'); var c = el('td', '', 'No pools match these filters.'); c.colSpan = 5; add(e, c); add(tbody, e); }
+    cnt.textContent = 'Showing ' + Math.min(state.n, rows.length) + ' of ' + rows.length + ' pools.'; more.hidden = rows.length <= state.n;
+  }
+  q.oninput = function () { state.q = q.value.trim().toLowerCase(); state.n = 15; draw(); };
+  sd.onchange = function () { state.dex = sd.value; state.n = 15; draw(); };
+  ss.onchange = function () { state.st = ss.value; state.n = 15; draw(); };
+  so.onchange = function () { state.sort = so.value; state.dir = (so.value === 'name' || so.value === 'dex') ? 1 : -1; draw(); };
+  draw();
+
+
+  /* ---------- helpers: svg, csv ---------- */
+  var NS = 'http://www.w3.org/2000/svg';
+  function sv(tag, attrs, parent) { var e = document.createElementNS(NS, tag); Object.keys(attrs || {}).forEach(function (k) { e.setAttribute(k, attrs[k]); }); if (parent) parent.appendChild(e); return e; }
+  function csvOf(cols, rows) { return [cols.map(function (c) { return c[1]; }).join(',')].concat(rows.map(function (r) { return cols.map(function (c) { var v = String(r[c[0]] === undefined ? '' : r[c[0]]); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }).join(','); })).join('\n'); }
+  function csvButton(host, getCsv) {
+    var b = el('button', 'btn', 'Copy as CSV'); b.type = 'button'; var box = null;
+    b.onclick = function () {
+      var txt = getCsv();
+      function fallback() { if (!box) { box = el('textarea', 'csv'); box.readOnly = true; box.setAttribute('aria-label', 'CSV text'); host.appendChild(box); } box.value = txt; box.focus(); box.select(); }
+      try { navigator.clipboard.writeText(txt).then(function () { b.textContent = 'Copied'; setTimeout(function () { b.textContent = 'Copy as CSV'; }, 1800); }, fallback); } catch (e) { fallback(); }
+    };
+    return b;
+  }
+  var CS = D.costsum[0], FNAME = { age: 'Age outside ' + minAge + '–' + maxAge + ' days', liq: 'Liquidity below ' + compact(floor), vol24: 'Daily volume below ' + compact(cfg.min_vol24_usd),
+    'vol/liq': 'Volume / liquidity ratio off', h1: '1-hour move outside ' + cfg.h1_change_min + '–' + cfg.h1_change_max + '%', h24: '24-hour move outside ' + cfg.h24_change_min + '–' + cfg.h24_change_max + '%' };
+
+  /* ---------- strategy: trade math ---------- */
+  var tm = $('trade');
+  head(tm, 'Trade math', 'A trade must rise ' + CS.breakeven_pct + '% just to break even',
+    'Computed with the bot\'s own cost functions for one ' + money(S.position_usd) + ' position. Pool depth barely matters at this size, so one reference pool is drawn.');
+  var cbox = el('div', 'chartbox'); add(tm, cbox);
+  function drawPayoff() {
+    cbox.replaceChildren(); var rows = D.costmath, w = Math.max(280, cbox.clientWidth || 640), h = w < 520 ? 250 : 320, m = { l: 52, r: 18, t: 16, b: 44 };
+    var svg = sv('svg', { viewBox: '0 0 ' + w + ' ' + h, role: 'img', 'aria-label': 'Net profit or loss of one trade against the price move, with stop loss, take profit and break-even marked' }, cbox);
+    var ys = rows.map(function (r) { return r.pnl_usd; }), y0 = Math.floor(Math.min.apply(null, ys) * 4) / 4, y1 = Math.ceil(Math.max.apply(null, ys) * 4) / 4;
+    var X = function (v) { return m.l + (v + 50) / 150 * (w - m.l - m.r); }, Y = function (v) { return h - m.b - (v - y0) / (y1 - y0) * (h - m.t - m.b); };
+    for (var g = y0; g <= y1 + 1e-9; g += 0.25) { sv('line', { x1: m.l, x2: w - m.r, y1: Y(g), y2: Y(g), stroke: 'var(--line)', 'stroke-width': 1 }, svg); var t = sv('text', { x: m.l - 8, y: Y(g) + 4, 'text-anchor': 'end' }, svg); t.textContent = (g < 0 ? '-$' : '$') + Math.abs(g).toFixed(2); }
+    [-50, -25, 0, 25, 50, 75, 100].forEach(function (v) { var t = sv('text', { x: X(v), y: h - 22, 'text-anchor': 'middle' }, svg); t.textContent = (v > 0 ? '+' : '') + v + '%'; });
+    var xl = sv('text', { x: (m.l + w - m.r) / 2, y: h - 4, 'text-anchor': 'middle' }, svg); xl.textContent = 'Price move after buying';
+    sv('line', { x1: m.l, x2: w - m.r, y1: Y(0), y2: Y(0), stroke: 'var(--ink3)', 'stroke-width': 1 }, svg);
+    var narrow = w < 520; [[-CS.stop_pct, (narrow ? 'Stop ' : 'Stop loss ') + (-CS.stop_pct) + '%'], [CS.tp_pct, (narrow ? 'TP +' : 'Take profit +') + CS.tp_pct + '%']].forEach(function (mk) {
+      sv('line', { x1: X(mk[0]), x2: X(mk[0]), y1: m.t, y2: h - m.b, stroke: 'var(--ink3)', 'stroke-width': 1 }, svg);
+      var t = sv('text', { x: X(mk[0]) + (mk[0] < 0 ? -6 : 6), y: m.t + 12, 'text-anchor': mk[0] < 0 ? 'end' : 'start' }, svg); t.textContent = mk[1];
+    });
+    var d = rows.map(function (r, i) { return (i ? 'L' : 'M') + X(r.move_pct).toFixed(1) + ' ' + Y(r.pnl_usd).toFixed(1); }).join(' ');
+    sv('path', { d: d, fill: 'none', stroke: 'var(--accent)', 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }, svg);
+    [[CS.breakeven_pct, 0, 'Break-even +' + CS.breakeven_pct + '%'], [-CS.stop_pct, CS.stop_pnl_usd, ''], [CS.tp_pct, CS.tp_pnl_usd, '']].forEach(function (pt) {
+      sv('circle', { cx: X(pt[0]), cy: Y(pt[1]), r: 5, fill: 'var(--accent)', stroke: 'var(--card)', 'stroke-width': 2 }, svg);
+      if (pt[2]) { var t = sv('text', { x: X(pt[0]) + 8, y: Y(pt[1]) + 18 }, svg); t.textContent = pt[2]; }
+    });
+    var tl = sv('text', { x: X(-CS.stop_pct) + 9, y: Y(CS.stop_pnl_usd) + 18, 'text-anchor': 'start' }, svg); tl.textContent = money(CS.stop_pnl_usd);
+    var tt = sv('text', { x: X(CS.tp_pct) - 8, y: Y(CS.tp_pnl_usd) - 8, 'text-anchor': 'end' }, svg); tt.textContent = '+' + money(CS.tp_pnl_usd);
+    var tip = el('div', 'tip'); tip.hidden = true; cbox.appendChild(tip); var vl = sv('line', { y1: m.t, y2: h - m.b, stroke: 'var(--ink2)', 'stroke-width': 1, visibility: 'hidden' }, svg);
+    var hit = sv('rect', { x: m.l, y: m.t, width: w - m.l - m.r, height: h - m.t - m.b, fill: 'transparent', tabindex: 0 }, svg);
+    function at(clientX) {
+      var r = svg.getBoundingClientRect(), px = (clientX - r.left) * (w / r.width), v = (px - m.l) / (w - m.l - m.r) * 150 - 50, best = rows[0];
+      rows.forEach(function (q) { if (Math.abs(q.move_pct - v) < Math.abs(best.move_pct - v)) best = q; });
+      vl.setAttribute('x1', X(best.move_pct)); vl.setAttribute('x2', X(best.move_pct)); vl.setAttribute('visibility', 'visible');
+      tip.hidden = false; tip.textContent = ''; add(tip, document.createTextNode('Price ' + (best.move_pct > 0 ? '+' : '') + best.move_pct + '%  →  '), el('b', '', (best.pnl_usd < 0 ? '-' : '+') + money(Math.abs(best.pnl_usd))));
+      tip.style.left = Math.min(Math.max(0, X(best.move_pct) * r.width / w + 10), r.width - 170) + 'px'; tip.style.top = '8px';
+    }
+    hit.addEventListener('pointermove', function (e) { at(e.clientX); });
+    hit.addEventListener('pointerleave', function () { tip.hidden = true; vl.setAttribute('visibility', 'hidden'); });
+  }
+  drawPayoff(); var rt; window.addEventListener('resize', function () { clearTimeout(rt); rt = setTimeout(drawPayoff, 120); });
+
+  var kv = el('div', 'kv');
+  [['Cost of a round trip', money(CS.flat_cost_usd, 3), CS.flat_cost_pct + '% of the position, price unchanged'],
+   ['Win / loss size', CS.win_to_loss_ratio + ' : 1', 'take profit ' + money(CS.tp_pnl_usd) + ' vs stop loss ' + money(Math.abs(CS.stop_pnl_usd))],
+   ['Win rate needed to break even', CS.required_win_rate_pct + '%', 'of trades must hit the take profit'],
+   ['Break-even if rent is lost', '+' + CS.breakeven_with_rent_pct + '%', 'rent ' + money(S.rent_usd, 3) + ' (' + S.rent_pct_of_position + '% of position), not modelled yet']
+  ].forEach(function (k) { add(kv, add(el('div'), el('span', 'k', k[0]), el('span', 'v', k[1]), el('span', 'n', k[2]))); });
+  add(tm, kv);
+  var parts = D.costparts, pmax = Math.max.apply(null, parts.map(function (x) { return x.usd; }));
+  add(tm, el('h3', '', 'Where the ' + money(CS.flat_cost_usd, 3) + ' goes'),
+    bars(parts.map(function (x) { return { label: x.part, value: x.usd }; }), pmax, function (v) { return money(v, 4); }));
+  add(tm, add(el('p', 'callout'), el('b', '', 'What this means: '), document.createTextNode('on a $1 position the flat network fee is the biggest cost, so very small trades start with a handicap. The simulation already charges it. Token-account rent is the next big item and is added in the realistic-costs task.')),
+    tableView(['Price move', 'Net result'], D.costmath.map(function (r) { return [(r.move_pct > 0 ? '+' : '') + r.move_pct + '%', money(r.pnl_usd, 3)]; })));
+
+  /* ---------- strategy: why rejected ---------- */
+  var W = D.watch, nPass = W.filter(function (r) { return r.passes; }).length;
+  var rj = $('rejects');
+  head(rj, 'Why pools are rejected', nPass + ' of ' + W.length + ' pools pass every filter right now', 'Pools with price history so far, judged on their latest downloaded candle. One pool can fail several filters.');
+  var rItems = D.rejects.map(function (r) { return { label: FNAME[r.filter], value: r.count, kind: '' }; }).sort(function (a, b) { return b.value - a.value; });
+  add(rj, bars(rItems, Math.max(W.length, 1)), el('p', 'small', 'Liquidity here is today\'s value. Buy pressure is not tested because the free price history has no trade counts.'),
+    tableView(['Filter', 'Pools failing'], rItems.map(function (i) { return [i.label, i.value]; })));
+
+  /* ---------- strategy: readiness ---------- */
+  var rd = $('ready'), nOk = D.readiness.filter(function (g) { return g.status === 'pass'; }).length;
+  head(rd, 'Readiness for real money', nOk + ' of ' + D.readiness.length + ' gates cleared', 'Every gate must be green before live trading is even discussed. Live trading is never switched on from this environment.');
+  var gl = el('ul', 'gates');
+  D.readiness.forEach(function (g) {
+    var li = el('li'); add(li, el('span', 'gi ' + g.status, g.status === 'pass' ? '✓' : g.status === 'fail' ? '✕' : ''), add(el('div'), el('p', 'gt', g.gate), el('p', 'gd', g.detail)),
+      el('span', 'gs', g.status === 'pass' ? 'Passed' : g.status === 'fail' ? 'Failed' : 'Pending')); add(gl, li);
+  });
+  add(rd, gl);
+
+  /* ---------- strategy: watchlist ---------- */
+  var wl = $('watch'); head(wl, 'Watchlist', 'What each downloaded pool would do today', 'Closest to passing first. "Blocked by" names every filter the pool fails.');
+  var wstate = { show: 'all', n: 12 }, wctl = el('div', 'controls'), wsel = el('select'); wsel.id = 'w-show';
+  [['all', 'All pools'], ['near', 'One filter away'], ['pass', 'Passing everything']].forEach(function (o) { add(wsel, new Option(o[1], o[0])); });
+  add(wctl, field('Show', wsel)); add(wl, wctl);
+  var wt = el('table', 'cards'), wh = el('thead'), whr = el('tr'); ['Pool', 'Age', 'Liquidity', '1h', '24h', 'Blocked by'].forEach(function (c, i) { var th = el('th', i > 0 && i < 5 ? 'r' : '', c); th.scope = 'col'; add(whr, th); });
+  add(wh, whr); var wb = el('tbody'); add(wt, wh, wb); add(wl, add(el('div', 'scroll'), wt));
+  var wcnt = el('p', 'small'), wmore = el('button', 'btn', 'Show more'); wmore.type = 'button'; wmore.onclick = function () { wstate.n += 25; wdraw(); };
+  var wact = add(el('div', 'row-actions'), wmore);
+  var wcsv = csvButton(wl, function () { return csvOf([['name', 'pool'], ['dex', 'exchange'], ['age_days', 'age_days'], ['liq_usd', 'liquidity_usd'], ['h1_pct', 'h1_pct'], ['h24_pct', 'h24_pct'], ['failed', 'failed_filters']], W.map(function (r) { return Object.assign({}, r, { failed: r.failed.join(' ') }); })); });
+  add(wact, wcsv); add(wl, wcnt, wact);
+  function wdraw() {
+    var rows = W.filter(function (r) { return wstate.show === 'all' || (wstate.show === 'pass' ? r.passes : r.failed.length === 1); });
+    wb.replaceChildren();
+    rows.slice(0, wstate.n).forEach(function (r) {
+      var tr = el('tr'); function td(label, txt, cls) { var c = el('td', cls || '', txt); c.dataset.label = label; return c; }
+      var blk = td('Blocked by', '');
+      if (r.passes) { add(blk, dot('good'), document.createTextNode(' Passes all filters')); } else { add(blk, dot('warn'), document.createTextNode(' ' + r.failed.map(function (f) { return f === 'h1' ? '1-hour move' : f === 'h24' ? '24-hour move' : f === 'liq' ? 'liquidity' : f === 'vol24' ? 'volume' : f === 'vol/liq' ? 'volume / liquidity' : 'age'; }).join(', '))); }
+      add(tr, td('Pool', r.name), td('Age', r.age_days + ' d', 'r num'), td('Liquidity', compact(r.liq_usd), 'r num'), td('1h', (r.h1_pct > 0 ? '+' : '') + r.h1_pct + '%', 'r num'), td('24h', (r.h24_pct > 0 ? '+' : '') + r.h24_pct + '%', 'r num'), blk); add(wb, tr);
+    });
+    if (!rows.length) { var e = el('tr'), c = el('td', '', 'No pools in this view.'); c.colSpan = 6; add(e, c); add(wb, e); }
+    wcnt.textContent = 'Showing ' + Math.min(wstate.n, rows.length) + ' of ' + rows.length + ' pools.'; wmore.hidden = rows.length <= wstate.n;
+  }
+  wsel.onchange = function () { wstate.show = wsel.value; wstate.n = 12; wdraw(); }; wdraw();
+
+  /* ---------- strategy: backtest ---------- */
+  var bt = $('backtest'); head(bt, 'Backtest', D.backtest.length ? 'First result, with caveats' : 'Not run yet', D.backtest.length ? '' : 'It starts automatically once the price history finishes downloading (' + etaTxt + ').');
+  if (!D.backtest.length) {
+    add(bt, add(el('div', 'empty'), document.createTextNode('When it runs, this panel shows the items below. A negative or inconclusive result gets the same space as a good one.')));
+    var wl2 = el('ul', 'rows');
+    [['Trades and net profit after costs', 'On the same rules and cost model as the live loop.'], ['Profit factor, win rate, biggest drawdown', 'Plus the mix of exit reasons (stop, take profit, trailing, time).'],
+     ['Random-entry comparison', 'Does the strategy beat entering at random times with the same exits and costs?'], ['Confidence range', 'A bootstrap interval, so a lucky run is not mistaken for an edge.'],
+     ['Bias statement', 'Survivorship share, filters that could not be tested, and costs that use today\'s liquidity.']
+    ].forEach(function (r) { add(wl2, add(el('li'), el('span', 'nm', r[0]), el('span', 'ds', r[1]))); }); add(bt, wl2);
+  } else {
+    var bl = el('ul', 'rows stackv'); D.backtest.forEach(function (r) { var li = el('li'); add(li, el('span', 'nm', r.label), el('span', 'val', r.value)); if (r.note) add(li, el('span', 'ds', r.note)); add(bl, li); }); add(bt, bl);
+  }
+
+  /* ---------- overview: latest finding ---------- */
+  if (D.backtest.length) {
+    var byKey = {}; D.backtest.forEach(function (r) { if (r.key) byKey[r.key] = r; });
+    var fd = $('finding'); fd.hidden = false;
+    head(fd, 'Latest finding \u00b7 first backtest', 'Negative, but not yet a clean test of memecoins',
+      'The direction is negative in every variant, yet most pools tested were not memecoins and the memecoin sample is small. Treat it as a warning, not a verdict.');
+    var fl = el('ul', 'rows stackv');
+    ['caveat', 'meme', 'all'].forEach(function (k) { var r = byKey[k]; if (r) add(fl, add(el('li'), el('span', 'nm', r.label), el('span', 'val', r.value), el('span', 'ds', r.note))); });
+    add(fd, fl);
+    var go = el('button', 'btn', 'See the full evidence'); go.type = 'button'; go.onclick = function () { show('strategy', true); }; add(fd, go);
+  }
+
+  /* ---------- data: quality ---------- */
+  var qd = $('quality'); head(qd, 'Can the data be trusted?', 'Known limits of this evidence', 'Stated up front so no result is read more strongly than it deserves.');
+  var ql = el('ul', 'rows');
+  [['Pools with price history', fInt.format(S.pools_with_candles), S.candles_oldest + ' to ' + S.candles_newest + ' UTC, 5-minute candles.'],
+   ['Survivorship', fInt.format(pools.filter(function (p) { return p.liq_now_usd < floor; }).length) + ' of ' + fInt.format(pools.length) + ' below the floor', 'Only pools that exist today are listed; tokens that died are under-represented.'],
+   ['Liquidity history', 'not available', 'Today\'s liquidity is used as a proxy, which can flatter results.'],
+   ['Buy pressure and trade counts', 'not testable', 'The free history has no buy/sell counts, so that filter is skipped in the backtest.'],
+   ['Discovery sources', (D.sources && D.sources.length ? D.sources.length + ' tagged sources' : 'GeckoTerminal only'), 'The backtest universe is GeckoTerminal listings. The collector uses every source, so the forward data is not limited to them.']
+  ].forEach(function (r) { add(ql, add(el('li'), el('span', 'nm', r[0]), el('span', 'val', r[1]), el('span', 'ds', r[2]))); }); add(qd, ql);
+
+  /* ---------- data: graduation stream ---------- */
+  var gs0 = $('stream'), obs = S.grad_observed;
+  if (obs === undefined) {
+    head(gs0, 'Graduation stream', 'Not started', 'The collector that watches every new pool after graduation has not run yet.');
+    add(gs0, el('div', 'empty', 'Start it with: python3 bot/launches.py run'));
+  } else {
+    head(gs0, 'Graduation stream', fInt.format(obs) + ' graduates observed so far',
+      'Every new pool that is not a bonding curve is recorded with its detection delay, classified, then snapshotted at fixed ages. Nothing is back-filled. ' + (S.collector_running ? 'Collector running.' : 'Collector not running in this snapshot.'));
+    var kv2 = el('div', 'kv');
+    [['Pools seen', fInt.format(S.grad_seen), fInt.format(S.grad_curve_ignored) + ' were bonding curves (ignored)'],
+     ['Too small', fInt.format(S.grad_tiny), 'under $3,000 liquidity'], ['Detected late', fInt.format(S.grad_late), 'over 5 minutes after creation'],
+     ['Median detection delay', S.grad_delay_median_s == null ? '\u2014' : S.grad_delay_median_s + ' s', 'how long the data source takes to list a new pool'],
+     ['Stream gaps', fInt.format(S.grad_stream_gaps), 'polls with no overlap, pools may be missed'], ['Snapshots', fInt.format(S.grad_snaps), fInt.format(S.grad_snaps_missed) + ' missed (not back-filled)'],
+     ['Cost probes', fInt.format(S.grad_probes), 'Jupiter quotes, nothing sent'], ['Safety reports', fInt.format(S.grad_safety), 'RugCheck full reports']
+    ].forEach(function (k) { add(kv2, add(el('div'), el('span', 'k', k[0]), el('span', 'v', k[1]), el('span', 'n', k[2]))); });
+    add(gs0, kv2);
+    add(gs0, el('h3', '', 'Classification of observed graduates'));
+    var cl = [['Confirmed memecoin', S.grad_confirmed], ['Probable memecoin', S.grad_probable], ['Not a memecoin', S.grad_not_memecoin], ['Unknown', S.grad_unknown]];
+    add(gs0, bars(cl.map(function (c) { return { label: c[0], value: c[1], kind: c[0].indexOf('memecoin') > 0 && c[0].indexOf('Not') < 0 ? '' : 'mute' }; }), Math.max.apply(null, cl.map(function (c) { return c[1]; }).concat([1]))));
+    if (D.launch_ages && D.launch_ages.length) {
+      add(gs0, el('h3', '', 'Snapshots taken by pool age'));
+      add(gs0, bars(D.launch_ages.map(function (a) { return { label: a.label, value: a.snapshots }; }), Math.max.apply(null, D.launch_ages.map(function (a) { return a.snapshots; }))));
+    }
+    var rc = D.launch_recent || [];
+    if (rc.length) {
+      add(gs0, el('h3', '', 'Latest graduates'));
+      var tw3 = el('div', 'scroll'), t3 = el('table', 'cards'), h3 = el('thead'), hr3 = el('tr');
+      ['Pool', 'Class', 'Liquidity', 'Delay', 'Snapshots', 'Sell cost $2.50', 'Insiders'].forEach(function (c, i) { var th = el('th', i > 1 ? 'r' : '', c); th.scope = 'col'; add(hr3, th); });
+      add(h3, hr3); var b3 = el('tbody');
+      rc.forEach(function (r) {
+        var tr = el('tr'); function td(l, t, c) { var x = el('td', c || '', t); x.dataset.label = l; return x; }
+        add(tr, td('Pool', r.name), td('Class', r['class'].replace('memecoin_', '')), td('Liquidity', compact(r.liq_usd), 'r num'), td('Delay', r.delay_s + ' s', 'r num'),
+          td('Snapshots', String(r.snapshots), 'r num'), td('Sell cost $2.50', r.rt_pct == null ? 'not probed yet' : r.rt_pct.toFixed(2) + '%', 'r num'),
+          td('Insiders', r.insiders == null ? 'not checked yet' : (r.insiders ? r.insiders + ' flagged' : 'none flagged'), 'r')); add(b3, tr);
+      });
+      add(t3, h3, b3); add(tw3, t3); add(gs0, tw3);
+    }
+  }
+
+  /* ---------- strategy: pre-registered tests progress ---------- */
+  var pr = $('prereg'), PR = D.prereg || [];
+  head(pr, 'Pre-registered tests', PR.length ? 'Sample collected for each test' : 'Collector not started',
+    'Each test needs at least ' + (PR.length ? PR[0].needed : 300) + ' graduates with both snapshots before it can say anything. Below that the result is "inconclusive", never "no effect". Rules are fixed in docs/PREREGISTRATION.md.');
+  if (PR.length) {
+    var pl2 = el('ul', 'rows stackv');
+    PR.forEach(function (t) {
+      var li = el('li'); add(li, el('span', 'nm', t.id + ' \u00b7 ' + t.claim), el('span', 'val', t.n + ' of ' + t.needed + ' graduates'),
+        add(el('div', 'ds'), meter(t.pct, t.id + ' sample'), el('span', '', 'Entry at pool age ' + (t.entry_age < 120 ? t.entry_age + ' min' : t.entry_age / 60 + ' h') + ', exit at ' + (t.exit_age < 120 ? t.exit_age + ' min' : t.exit_age / 60 + ' h'))));
+      add(pl2, li);
+    });
+    add(pr, pl2);
+  }
+
+  /* ---------- data: candidate sources ---------- */
+  var sm = $('srcmix'), SR = D.sources || [];
+  if (!SR.length) {
+    head(sm, 'Candidate sources', 'No collector data yet', 'Run the collector to see where candidates come from and how many pass each filter.');
+    add(sm, el('div', 'empty', 'Start it with: python3 bot.py collect'));
+  } else {
+    head(sm, 'Candidate sources', fInt.format(S.last_discovered) + ' candidates found in the last cycle',
+      'The first build saw ' + S.baseline_with_pair + ' tradable pairs, all from paid-promotion lists. This cycle found ' + fInt.format(S.last_with_pair) + ' pairs from ' + SR.length + ' tagged sources (' + (S.last_with_pair / S.baseline_with_pair).toFixed(1) + ' times more). Last cycle ' + S.collector_last + '.');
+    add(sm, bars(SR.map(function (r) { return { label: r.source, value: r.with_pair, kind: r.paid ? 'mute' : '', sub: r.paid ? 'paid promotion' : 'organic' }; }), Math.max.apply(null, SR.map(function (r) { return r.with_pair; }))));
+    var tw2 = el('div', 'scroll'), t2 = el('table', 'cards'), h2 = el('thead'), hr2 = el('tr');
+    ['Source', 'Type', 'Candidates', 'With pair', 'In age window', 'Pass all filters', 'Main blockers'].forEach(function (c, i) { var th = el('th', i > 1 && i < 6 ? 'r' : '', c); th.scope = 'col'; add(hr2, th); });
+    add(h2, hr2); var b2 = el('tbody');
+    SR.forEach(function (r) {
+      var tr = el('tr'); function td(l, t, c) { var x = el('td', c || '', t); x.dataset.label = l; return x; }
+      add(tr, td('Source', r.source), td('Type', r.paid ? 'Paid' : 'Organic'), td('Candidates', fInt.format(r.candidates), 'r num'), td('With pair', fInt.format(r.with_pair), 'r num'),
+        td('In age window', r.age_ok_pct + '%', 'r num'), td('Pass all filters', r.pass_pct + '%', 'r num'), td('Main blockers', r.top_rejects)); add(b2, tr);
+    });
+    add(t2, h2, b2); add(tw2, t2); add(sm, tw2);
+    add(sm, add(el('p', 'callout'), el('b', '', 'Reading this: '), document.createTextNode('only a small share of every source sits inside the strategy\'s age window, and almost none pass the one-hour momentum band at any given moment. One cycle is a snapshot; the collector keeps adding cycles so these rates become reliable.')),
+      tableView(['Source', 'Pairs seen'], SR.map(function (r) { return [r.source, r.with_pair]; })));
+  }
+
+  /* ---------- log: glossary ---------- */
+  var gs = $('glossary'); head(gs, 'Glossary', 'Terms in plain words');
+  var dl = el('dl', 'gl'); D.glossary.forEach(function (g) { add(dl, add(el('div'), el('dt', '', g.term), el('dd', '', g.meaning))); }); add(gs, dl);
+
+  /* ---------- rules ---------- */
+  var pp = $('pipeline'); head(pp, 'Pipeline', 'How a trade is decided', 'A pool must pass every step to be bought. Each rejection is counted so you can see which rule removes the most.');
+  var taskSt = {}; D.tasks.forEach(function (t) { taskSt[t.task] = t.status; });
+  var steps = [['Discover', 'Collect candidate tokens from several sources, each tagged so source bias can be measured.', 2],
+    ['Filter', 'Age, liquidity, volume, momentum and buy pressure. Missing data is "not evaluable", never a pass.', 1],
+    ['Safety checks', 'Mint and freeze authority, holder concentration, Token-2022 traps, liquidity lock, a simulated sell.', 5],
+    ['Paper entry', 'Fill at the next candle after the signal, with fees, slippage, delay and account rent charged.', 4],
+    ['Manage the exit', 'Stop loss, take profit, trailing stop, time limit, liquidity drop. Unclear candles resolve to the worse outcome.', 1],
+    ['Verdict', 'Out-of-sample results only, compared with random entries. Go / no-go comes from coded limits.', 3]];
+  var fl = el('ol', 'flow');
+  steps.forEach(function (s, i) {
+    var st = taskSt[s[2]], li = el('li'); add(li, el('span', 'sn', 'STEP ' + (i + 1)), el('h3', '', s[0]), el('p', 'small', s[1]));
+    var tag = el('p', 'tag'); add(tag, dot(st === 'done' ? 'good' : st === 'active' ? 'warn' : ''), document.createTextNode(st === 'done' ? 'Built' : st === 'active' ? 'Being built' : 'Planned (task ' + s[2] + ')')); add(li, tag); add(fl, li);
+  });
+  add(pp, fl);
+
+  var GN = { filters: ['Entry filters', 'A pool must pass all of these to be considered.'], exit: ['Exit rules', 'When an open paper position is closed.'], costs: ['Costs', 'Charged on every simulated swap. Optimistic until the realistic-costs task.'],
+    risk: ['Risk limits', 'Enforced in code, not in prompts.'], limits: ['Size limits', 'How much can ever be at risk.'], verdict: ['Verdict', 'What it takes to call the strategy a go.'], universe: ['Universe', 'Which pools are even looked at.'] };
+  var order = ['filters', 'exit', 'costs', 'risk', 'limits', 'verdict', 'universe'], rg = $('rulegroups');
+  var UNIT = { USD: function (v) { return v >= 1000 ? '$' + fInt.format(v) : Number.isInteger(v) ? '$' + v : '$' + v.toFixed(2); }, '%': function (v) { return v + '%'; }, hours: function (v) { return v + ' h'; }, ratio: function (v) { return String(v); }, count: function (v) { return String(v); } };
+  order.forEach(function (g) {
+    var rows = cfgRows.filter(function (r) { return r.group === g; }); if (!rows.length) return;
+    var c = el('div', 'card'); head(c, '', GN[g][0], GN[g][1]); var ul = el('ul', 'rows');
+    rows.forEach(function (r) {
+      var val = UNIT[r.unit] ? UNIT[r.unit](r.value) : r.unit.charAt(0) === '%' ? r.value + r.unit : r.unit === 'x entry' ? r.value + '\u00d7 entry' : r.value + ' ' + r.unit;
+      var li = el('li'); add(li, el('span', 'nm', r.name), el('span', 'val', val), el('span', 'ds', r.why)); add(ul, li);
+    }); add(c, ul); add(rg, c);
+  });
+
+  /* ---------- log ---------- */
+  var sc = $('sources'); head(sc, 'Data sources', 'Every service the bot depends on', 'Probed from this environment when the snapshot was taken.');
+  var sl = el('ul', 'rows');
+  D.network.forEach(function (n) {
+    var ok = n.status === 'OK', li = el('li'); var nm = el('span', 'nm'); add(nm, dot(ok ? 'good' : 'bad'), document.createTextNode(' ' + n.check + ' · ' + (ok ? 'working' : 'not reachable')));
+    add(li, nm, el('span', 'val', n.latency_s.toFixed(2) + ' s'), el('span', 'ds', n.host + ' · ' + n.evidence)); add(sl, li);
+  });
+  if (!D.network.length) add(sc, el('div', 'empty', 'No probe results in this snapshot.')); else add(sc, sl);
+
+  var jn = $('journal'); head(jn, 'Audit trail', 'Project journal', 'Newest first. This is the project\'s record of every decision and result.');
+  var jl = el('ul', 'timeline');
+  D.activity.forEach(function (a) { var li = el('li'); add(li, el('span', 'when', a.date), add(el('div'), el('h3', '', a.title), el('p', 'small', a.detail))); add(jl, li); });
+  add(jn, jl);
+  var lk = el('a', '', 'Open the full journal on GitHub'); lk.href = 'https://github.com/Degi-ceo/solana-challenge/blob/claude/dreamy-lamport-fnqfha/JOURNAL.md'; lk.target = '_blank'; lk.rel = 'noopener'; add(jn, lk);
+
+  var lm = $('limits'); head(lm, 'Caveats', 'What this page does not show', '');
+  var cl2 = el('ul', 'rows');
+  ['It is a snapshot that Claude refreshes after each step, not a live stream. A live version needs the bot running on your server.',
+   'Candidates are pools listed today, so tokens that rugged and disappeared are under-represented (survivorship bias).',
+   'Liquidity is today\'s value, because the price-history source does not provide it. Backtest results are an upper bound, not proof.',
+   'Live trading is off in code and in configuration. Nothing on this page can switch it on.'
+  ].forEach(function (t) { add(cl2, add(el('li'), el('span', 'nm', t))); });
+  add(lm, cl2);
+
+  show(location.hash.slice(1));
+})();
+</script>

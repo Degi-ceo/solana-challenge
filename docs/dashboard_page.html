@@ -1,0 +1,473 @@
+<meta name="dash-one-writer">
+<style>
+  /* Layout concept: a control-room page. Hero with the one-line verdict and the safety state, then evidence (data),
+     then the rules the bot follows, then the plan and the audit trail. Everything numeric traces to a source. */
+  .bm { --gap: var(--cds-gap-lg); display: flex; flex-direction: column; gap: 36px; font-family: var(--font-anthropic-sans); color: var(--color-fg); }
+  .bm * { box-sizing: border-box; }
+  .bm h1 { font-family: var(--font-anthropic-serif); font-weight: 400; font-size: clamp(30px, 5vw, 44px); line-height: 1.08; margin: 0; text-wrap: balance; }
+  .bm h2 { font-size: 18px; font-weight: var(--cds-font-weight-medium); margin: 0; letter-spacing: -.005em; }
+  .bm h3 { font-size: var(--cds-font-size-body); font-weight: var(--cds-font-weight-medium); margin: 0; }
+  .bm p { margin: 0; line-height: 1.5; }
+  .bm .muted { color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); }
+  .bm .eyebrow { color: var(--color-fg-muted); font-size: 11px; letter-spacing: .09em; text-transform: uppercase; }
+  .bm b, .bm .num { font-variant-numeric: tabular-nums; }
+  .bm b { font-weight: var(--cds-font-weight-medium); }
+
+  .bm nav { display: flex; flex-wrap: wrap; gap: 8px; }
+  .bm nav a { text-decoration: none; color: var(--color-fg); font-size: var(--cds-font-size-caption); padding: 6px 12px; border-radius: 999px;
+    border: 1px solid var(--color-border-line); background: var(--color-panel); }
+  .bm nav a:hover, .bm nav a:focus-visible { border-color: var(--color-fg-muted); outline: none; }
+
+  .bm .hero { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(260px, 1fr); gap: 28px; align-items: stretch; }
+  @media (max-width: 760px) { .bm .hero { grid-template-columns: minmax(0, 1fr); } }
+  .bm .hero-l { display: flex; flex-direction: column; gap: 14px; justify-content: center; min-width: 0; }
+  .bm .lede { font-size: 16px; max-width: 62ch; }
+  .bm .stamp { display: inline-flex; align-items: center; gap: 8px; }
+  .bm .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--color-warn); display: inline-block; }
+  .bm .status { border: 1px solid var(--color-border-line); border-radius: 14px; background: var(--color-panel); padding: 18px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .bm .status .big { font-family: var(--font-anthropic-serif); font-size: 26px; line-height: 1.1; }
+  .bm .sw { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; align-items: center; font-size: var(--cds-font-size-caption); }
+  .bm .sw .chip { justify-self: end; }
+  .bm .chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: var(--cds-font-weight-medium);
+    border: 1px solid var(--color-border-line); white-space: nowrap; }
+  .bm .chip.ok { color: var(--color-ok); border-color: var(--color-ok); }
+  .bm .chip.bad { color: var(--color-bad); border-color: var(--color-bad); }
+  .bm .chip.warn { color: var(--color-warn); border-color: var(--color-warn); }
+  .bm .chip.mute { color: var(--color-fg-muted); }
+
+  .bm .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+  .bm .tile { padding: 16px; border: 1px solid var(--color-border-line); border-radius: 12px; background: var(--color-panel); display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .bm .tile .n { font-family: var(--font-anthropic-serif); font-size: 34px; line-height: 1.05; font-variant-numeric: tabular-nums; }
+  .bm .tile .l { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+  .bm .tile .s { font-size: 11px; color: var(--color-fg-muted); }
+
+  .bm section { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+  .bm .sec-h { display: flex; flex-direction: column; gap: 2px; }
+  .bm .card { padding: 18px; border: 1px solid var(--color-border-line); border-radius: 12px; background: var(--color-panel); min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+  .bm .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 16px; }
+  .bm .scroll { overflow-x: auto; }
+
+  .bm .bar { height: 14px; border-radius: 7px; background: var(--color-border-line); overflow: hidden; }
+  .bm .bar > span { display: block; height: 100%; width: 0; background: var(--color-ok); }
+  @media (prefers-reduced-motion: no-preference) { .bm .bar > span { transition: width .5s var(--cds-ease-out); } }
+
+  .bm .chartbox { position: relative; width: 100%; min-height: 240px; }
+  .bm svg { display: block; width: 100%; overflow: visible; }
+  .bm svg text { fill: var(--cds-text-secondary); font-size: 11px; font-family: var(--font-anthropic-sans); }
+  .bm .tip { position: absolute; pointer-events: none; z-index: 2; background: var(--cds-surface-popover); border: 1px solid var(--cds-border);
+    box-shadow: var(--cds-shadow-popover); color: var(--cds-text-secondary); border-radius: 8px; padding: 8px 10px; font-size: 12px; line-height: 1.4; max-width: 240px; }
+  .bm .legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 11px; color: var(--color-fg-muted); }
+  .bm .legend i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+
+  .bm .flow { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr)); gap: 12px; counter-reset: step; padding: 0; margin: 0; list-style: none; }
+  .bm .flow li { border: 1px solid var(--color-border-line); border-radius: 12px; background: var(--color-panel); padding: 14px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .bm .flow .stepn { width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--color-border-line); display: grid; place-items: center; font-size: 12px; color: var(--color-fg-muted); }
+  .bm .flow p { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+
+  .bm .controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .bm .controls input[type=search] { flex: 1 1 180px; min-width: 0; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--color-border-line);
+    background: var(--color-bg); color: var(--color-fg); font: inherit; font-size: var(--cds-font-size-caption); }
+  .bm .controls input:focus-visible { outline: 2px solid var(--color-fg-muted); outline-offset: 1px; }
+  .bm table { border-collapse: collapse; width: 100%; font-size: var(--cds-font-size-caption); font-variant-numeric: tabular-nums; }
+  .bm th, .bm td { text-align: left; padding: 7px 12px 7px 0; border-bottom: 1px solid var(--color-border-line); vertical-align: top; }
+  .bm th { color: var(--color-fg-muted); font-weight: var(--cds-font-weight-medium); white-space: nowrap; }
+  .bm th.sortable { cursor: pointer; user-select: none; }
+  .bm th.sortable:hover { color: var(--color-fg); }
+  .bm td.r, .bm th.r { text-align: right; }
+  .bm td.w { min-width: 220px; color: var(--color-fg-muted); }
+  .bm .ok-t { color: var(--color-ok); } .bm .bad-t { color: var(--color-bad); } .bm .warn-t { color: var(--color-warn); } .bm .mute-t { color: var(--color-fg-muted); }
+
+  .bm .phases { display: flex; flex-direction: column; gap: 10px; }
+  .bm .phase { display: grid; grid-template-columns: 90px 1fr auto; gap: 10px; align-items: center; font-size: var(--cds-font-size-caption); }
+  .bm .phase .bar { height: 8px; }
+
+  .bm .timeline { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0; }
+  .bm .timeline li { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 4px 16px; padding: 14px 0; border-bottom: 1px solid var(--color-border-line); }
+  @media (max-width: 520px) { .bm .timeline li { grid-template-columns: minmax(0, 1fr); } }
+  .bm .timeline .when { color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); font-variant-numeric: tabular-nums; }
+  .bm .timeline .what { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .bm .timeline .what p { color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); }
+
+  .bm details { border: 1px solid var(--color-border-line); border-radius: 12px; padding: 14px 16px; background: var(--color-panel); }
+  .bm summary { cursor: pointer; font-weight: var(--cds-font-weight-medium); }
+  .bm details ul { margin: 10px 0 0; padding-left: 1.2em; display: flex; flex-direction: column; gap: 6px; line-height: 1.45; font-size: var(--cds-font-size-caption); }
+  .bm .empty { color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); padding: 18px 0; }
+</style>
+
+<div class="bm">
+  <nav aria-label="Sections">
+    <a href="#evidence">Data collection</a><a href="#universe">Candidate pools</a><a href="#pipeline">How a trade is decided</a>
+    <a href="#rules">Rulebook</a><a href="#plan">Work plan</a><a href="#network">Data sources</a><a href="#log">Audit trail</a>
+  </nav>
+
+  <header class="hero" id="top">
+    <div class="hero-l">
+      <p class="eyebrow">Solana $5 paper-trading experiment · strategy A</p>
+      <h1 id="title">Bot monitor</h1>
+      <p class="lede" id="takeaway">Price history is downloaded for <b data-source="summary" data-field="pools_downloaded" data-row="0" data-draw="n_done">—</b>
+        of <b data-source="summary" data-field="pools_eligible" data-row="0" data-draw="n_elig">—</b> eligible pools so far.
+        The bot has placed <b data-source="summary" data-field="paper_trades" data-row="0" data-draw="n_trades">—</b> paper trades and risks no real money.</p>
+      <p class="muted stamp"><span class="dot" aria-hidden="true"></span>Snapshot taken <span data-source="summary" data-field="updated" data-row="0" data-draw="updated">—</span>. This is the last export, not a live stream.</p>
+    </div>
+    <aside class="status" aria-label="Safety state">
+      <p class="eyebrow">Safety state</p>
+      <p class="big" data-source="summary" data-field="mode" data-row="0" data-draw="mode">—</p>
+      <div class="sw">
+        <span>Live trading</span><span class="chip mute"><span data-draw="live_v" data-source="summary" data-field="live_trading" data-row="0">—</span></span>
+        <span>Kill file</span><span class="chip mute"><span data-draw="kill_v" data-source="summary" data-field="kill_file" data-row="0">—</span></span>
+        <span>Position size</span><b data-source="summary" data-field="position_usd" data-row="0" data-draw="pos_usd">—</b>
+        <span>Max open positions</span><b data-source="summary" data-field="max_open" data-row="0" data-draw="max_open">—</b>
+        <span>Daily loss limit</span><b data-source="summary" data-field="daily_loss_limit_usd" data-row="0" data-draw="loss_lim">—</b>
+        <span>Bankroll</span><b data-source="summary" data-field="bankroll_usd" data-row="0" data-draw="bankroll">—</b>
+      </div>
+    </aside>
+  </header>
+
+  <div class="tiles" aria-label="Key numbers">
+    <div class="tile"><span class="n" data-source="summary" data-field="pools_found" data-row="0" data-draw="t_found">—</span><span class="l">Pools found</span><span class="s">GeckoTerminal listings, 2–40 days old</span></div>
+    <div class="tile"><span class="n" data-source="summary" data-field="pools_eligible" data-row="0" data-draw="t_elig">—</span><span class="l">Eligible pools</span><span class="s">after the blue-chip / bad-data cap</span></div>
+    <div class="tile"><span class="n" data-source="summary" data-field="pools_meeting_liq_filter" data-row="0" data-draw="t_liq">—</span><span class="l">Meet the liquidity floor</span><span class="s">today's liquidity, not historical</span></div>
+    <div class="tile"><span class="n" data-source="summary" data-field="candles_stored" data-row="0" data-draw="t_candles">—</span><span class="l">5-minute candles stored</span><span class="s">the raw material for the backtest</span></div>
+    <div class="tile"><span class="n" data-source="summary" data-field="paper_trades" data-row="0" data-draw="t_trades">—</span><span class="l">Paper trades</span><span class="s">simulated, never real</span></div>
+    <div class="tile"><span class="n" data-source="summary" data-field="tests_passing" data-row="0" data-draw="t_tests">—</span><span class="l">Automated tests passing</span><span class="s">no look-ahead, exits, costs</span></div>
+  </div>
+
+  <section id="evidence" aria-label="Data collection">
+    <div class="sec-h"><h2>Data collection</h2><p class="muted">The backtest can only be as good as its history. Candles are fetched at one request every 5 seconds to stay inside the data provider's rate limit.</p></div>
+    <div class="cols">
+      <div class="card">
+        <h3>Download progress</h3>
+        <div class="bar" role="img" aria-label="Download progress"><span data-draw="bar" data-source="progress"></span></div>
+        <p><b data-source="progress" data-field="pct" data-row="0" data-draw="pct">—</b> of eligible pools have full history <span class="muted">(<span data-source="summary" data-field="pools_downloaded" data-row="0" data-draw="pg_done">—</span> of <span data-source="summary" data-field="pools_eligible" data-row="0" data-draw="pg_elig">—</span>)</span></p>
+        <div class="chartbox"><svg data-draw="hist_chart" data-source="history" role="img" aria-label="Pools downloaded over time"></svg></div>
+      </div>
+      <div class="card">
+        <h3>Work plan by phase</h3>
+        <div class="phases" data-draw="phases" data-source="phases"></div>
+        <p class="muted">Evidence builds the verdict, Realism makes the simulation honest, Execution is code that stays switched off.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="universe" aria-label="Candidate pools">
+    <div class="sec-h"><h2>Candidate pools</h2><p class="muted">Every pool the bot knows about. The shaded window on the chart is what strategy A is allowed to trade.</p></div>
+    <div class="cols">
+      <div class="card">
+        <h3>Age against liquidity</h3>
+        <div class="chartbox"><div data-draw="scatter" data-source="pools config" role="img" aria-label="Scatter of pool age against liquidity, with the strategy window shaded"></div></div>
+        <div class="legend"><span><i style="background: var(--color-ok)"></i>history downloaded</span><span><i style="background: var(--color-fg-muted)"></i>waiting</span></div>
+      </div>
+      <div class="card">
+        <h3>How much liquidity pools have</h3>
+        <div class="chartbox"><svg data-draw="band_chart" data-source="bands" role="img" aria-label="Number of pools per liquidity band"></svg></div>
+        <div class="legend"><span><i style="background: var(--color-ok)"></i>meets the floor</span><span><i style="background: var(--color-fg-muted)"></i>below the floor</span><span><i style="background: var(--color-bad)"></i>excluded as blue-chip / bad data</span></div>
+      </div>
+    </div>
+    <div class="cols">
+      <div class="card">
+        <h3>Where eligible pools trade</h3>
+        <div class="chartbox"><svg data-draw="dex_chart" data-source="by_dex" role="img" aria-label="Eligible pools per exchange"></svg></div>
+      </div>
+      <div class="card">
+        <h3>Pool explorer</h3>
+        <div class="controls">
+          <input type="search" id="pool-q" placeholder="Search pools" aria-label="Search pools">
+          <select class="dash-select" id="pool-dex" aria-label="Filter by exchange" data-draw="dex_select" data-source="by_dex"></select>
+        </div>
+        <div class="scroll">
+          <table data-source="pool_view" data-row-key="id">
+            <thead><tr>
+              <th class="sortable" data-sort="name" data-field="name">Pool</th>
+              <th class="sortable" data-sort="dex" data-field="dex">Exchange</th>
+              <th class="sortable r" data-sort="age" data-field="age_txt">Age</th>
+              <th class="sortable r" data-sort="liq" data-field="liq_txt">Liquidity</th>
+              <th class="sortable" data-sort="state" data-field="state">History</th>
+            </tr></thead>
+            <tbody data-draw="pool_body"></tbody>
+          </table>
+        </div>
+        <p class="muted" data-draw="pool_count" data-source="pool_view"></p>
+      </div>
+    </div>
+  </section>
+
+  <section id="pipeline" aria-label="How a trade is decided">
+    <div class="sec-h"><h2>How a trade is decided</h2><p class="muted">Six steps, in order. A pool must pass every step to be bought, and each step records why it rejected a pool.</p></div>
+    <ol class="flow">
+      <li><span class="stepn">1</span><h3>Discover</h3><p>Collect candidate tokens from several sources, tagged so source bias can be measured.</p><span class="chip mute" data-draw="step" data-task="2" data-source="tasks" data-field="status" data-where="task=2">—</span></li>
+      <li><span class="stepn">2</span><h3>Filter</h3><p>Age, liquidity, volume, momentum band and buy pressure. Missing data counts as not evaluable, never as a pass.</p><span class="chip mute" data-draw="step" data-task="1" data-source="tasks" data-field="status" data-where="task=1">—</span></li>
+      <li><span class="stepn">3</span><h3>Safety checks</h3><p>Mint and freeze authority, holder concentration, Token-2022 traps, liquidity lock, a simulated sell.</p><span class="chip mute" data-draw="step" data-task="5" data-source="tasks" data-field="status" data-where="task=5">—</span></li>
+      <li><span class="stepn">4</span><h3>Paper entry</h3><p>Fill at the next candle after the signal, with fees, slippage, latency and account rent charged.</p><span class="chip mute" data-draw="step" data-task="4" data-source="tasks" data-field="status" data-where="task=4">—</span></li>
+      <li><span class="stepn">5</span><h3>Manage the exit</h3><p>Stop loss, take profit, trailing stop, time limit, liquidity drop. Ambiguous candles resolve to the worse outcome.</p><span class="chip mute" data-draw="step" data-task="1" data-source="tasks" data-field="status" data-where="task=1">—</span></li>
+      <li><span class="stepn">6</span><h3>Verdict</h3><p>Out-of-sample results only, compared with random entries. The go / no-go is decided by coded thresholds.</p><span class="chip mute" data-draw="step" data-task="3" data-source="tasks" data-field="status" data-where="task=3">—</span></li>
+    </ol>
+  </section>
+
+  <section id="rules" aria-label="Rulebook">
+    <div class="sec-h"><h2>Rulebook</h2><p class="muted">Every threshold the bot uses, in plain words, read straight from its configuration file. These are starting guesses until the calibration task tests them on data.</p></div>
+    <div class="card">
+      <div class="controls"><select class="dash-select" id="rule-group" aria-label="Filter rules by group" data-draw="rule_select" data-source="rules_view"></select></div>
+      <div class="scroll">
+        <table data-source="rules_view" data-row-key="key">
+          <thead><tr><th data-field="group">Group</th><th data-field="name">Rule</th><th class="r" data-field="value">Value</th><th data-field="unit">Unit</th><th data-field="why">Why it exists</th></tr></thead>
+          <tbody data-draw="rules_body"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section id="plan" aria-label="Work plan">
+    <div class="sec-h"><h2>Work plan</h2><p class="muted">Nine tasks, done in order, each committed with a journal entry.</p></div>
+    <div class="card scroll">
+      <table data-source="tasks" data-row-key="task">
+        <thead><tr><th class="r" data-field="task">#</th><th data-field="title">Task</th><th data-field="phase">Phase</th><th data-field="status">Status</th><th data-field="note">Deliverable</th></tr></thead>
+        <tbody data-draw="tasks_body"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="network" aria-label="Data sources">
+    <div class="sec-h"><h2>Data sources</h2><p class="muted">Every external service the bot depends on, probed from this environment when the snapshot was taken.</p></div>
+    <div class="card scroll">
+      <table data-source="network" data-row-key="check">
+        <thead><tr><th data-field="check">Check</th><th data-field="host">Host</th><th data-field="status">Status</th><th class="r" data-field="latency_s">Seconds</th><th data-field="evidence">What came back</th></tr></thead>
+        <tbody data-draw="net_body"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="log" aria-label="Audit trail">
+    <div class="sec-h"><h2>Audit trail</h2><p class="muted">The project journal, newest first. It is the source of truth between work sessions.</p></div>
+    <div class="card"><ol class="timeline" data-draw="timeline" data-source="activity"></ol></div>
+  </section>
+
+  <details id="caveats">
+    <summary>What this dashboard does not show yet</summary>
+    <ul>
+      <li>It is a snapshot exported by the bot and refreshed when Claude republishes it; it does not stream from the work session.</li>
+      <li>Paper trades, the per-filter funnel, backtest results and the cost sensitivity table appear once those tasks produce data.</li>
+      <li>Candidates are pools listed today, so tokens that rugged and vanished are under-represented. Backtest numbers carry that survivorship caveat.</li>
+      <li>Liquidity on the charts is today's value, not historical, because the price-history source does not provide it.</li>
+      <li>Live trading is off in code and configuration. Nothing on this page can switch it on.</li>
+    </ul>
+  </details>
+</div>
+
+<script>
+  const ok = (g) => g.status === 'ok' && Array.isArray(g.data) && g.data.length > 0;
+  const rowsOf = (id) => { const g = dash.data(id); return ok(g) ? g.data : []; };
+  const first = (id) => rowsOf(id)[0] || null;
+  const fInt = d3.format(',.0f');
+  const money = (v) => '$' + d3.format(',.0f')(v);
+  const compact = (v) => v >= 1e9 ? '$' + d3.format('.2~f')(v / 1e9) + 'B' : v >= 1e6 ? '$' + d3.format('.2~f')(v / 1e6) + 'M' : v >= 1e3 ? '$' + d3.format('.3~s')(v).replace('k', 'k') : '$' + Math.round(v);
+  const cfgNum = (key, dflt) => { const r = rowsOf('config').find((x) => x.key === key); return r ? Number(r.value) : dflt; };
+  const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt !== undefined) e.textContent = txt; return e; };
+
+  /* ---- derived datasets ---- */
+  dash.calc('progress', {
+    title: 'History download progress', description: 'Share of eligible pools whose price history is downloaded.',
+    inputs: ['summary'],
+    fn: (summary) => summary.length ? [{ pct: 100 * Number(summary[0].pools_downloaded) / Math.max(1, Number(summary[0].pools_eligible)) }] : [],
+  });
+  dash.calc('phases', {
+    title: 'Tasks finished per phase', description: 'Done and total tasks for each phase of the work plan.',
+    inputs: ['tasks'],
+    fn: (tasks) => Object.values(tasks.reduce((m, t) => { const p = m[t.phase] || (m[t.phase] = { phase: t.phase, done: 0, total: 0 }); p.total++; if (t.status === 'done') p.done++; return m; }, {})),
+  });
+  dash.calc('by_dex', {
+    title: 'Eligible pools per exchange', description: 'Count of eligible pools (liquidity at or below the cap) by exchange.',
+    inputs: ['pools'],
+    fn: (pools) => Object.entries(pools.filter((p) => p.eligible).reduce((m, p) => (m[p.dex] = (m[p.dex] || 0) + 1, m), {}))
+      .map(([dex, count]) => ({ dex, count })).sort((a, b) => b.count - a.count).slice(0, 10),
+  });
+  dash.calc('bands', {
+    title: 'Pools per liquidity band', description: 'Pools grouped by current liquidity; the last row counts pools excluded by the cap.',
+    inputs: ['pools', 'config'],
+    fn: (pools, config) => {
+      const floor = Number((config.find((c) => c.key === 'min_liq_usd') || {}).value || 50000);
+      const edges = [[0, 5e4, '< $50k'], [5e4, 2.5e5, '$50k–250k'], [2.5e5, 1e6, '$250k–1M'], [1e6, 5e6, '$1M–5M'], [5e6, 5e7, '$5M–50M']];
+      const out = edges.map(([lo, hi, band]) => ({ band, count: pools.filter((p) => p.eligible && p.liq_now_usd >= lo && p.liq_now_usd < hi).length, kind: lo >= floor ? 'pass' : 'below' }));
+      out.push({ band: '> $50M (excluded)', count: pools.filter((p) => !p.eligible).length, kind: 'excluded' });
+      return out;
+    },
+  });
+  dash.calc('pool_view', {
+    title: 'Pool explorer rows', description: 'Every pool with display text for age, liquidity and download state.',
+    inputs: ['pools'],
+    fn: (pools) => pools.map((p) => ({
+      id: p.pool, name: p.name, dex: p.dex, age: p.age_days, liq: p.liq_now_usd, age_txt: p.age_days + ' d',
+      liq_txt: p.liq_now_usd >= 1e9 ? '$' + (p.liq_now_usd / 1e9).toFixed(1) + 'B' : p.liq_now_usd >= 1e6 ? '$' + (p.liq_now_usd / 1e6).toFixed(1) + 'M' : p.liq_now_usd >= 1e3 ? '$' + Math.round(p.liq_now_usd / 1e3) + 'k' : '$' + p.liq_now_usd,
+      state: !p.eligible ? 'excluded' : p.downloaded ? 'downloaded' : 'waiting', eligible: p.eligible,
+    })),
+  });
+  dash.calc('rules_view', {
+    title: 'Rulebook rows', description: 'Configuration values with their group, unit and plain-language reason.',
+    inputs: ['config'],
+    fn: (config) => config.map((c) => ({ key: c.key, group: c.group, name: c.name, value: String(c.value), unit: c.unit, why: c.why })),
+  });
+
+  /* ---- simple text drawings ---- */
+  const text = (name, field, fmt, src) => dash.draw(name, (e) => { const r = first(src || 'summary'); e.textContent = r && r[field] !== undefined ? (fmt ? fmt(r[field]) : r[field]) : '—'; });
+  text('n_done', 'pools_downloaded', fInt); text('n_elig', 'pools_eligible', fInt); text('n_trades', 'paper_trades', fInt);
+  text('updated', 'updated'); text('mode', 'mode');
+  text('pos_usd', 'position_usd', (v) => '$' + Number(v).toFixed(2)); text('loss_lim', 'daily_loss_limit_usd', (v) => '$' + Number(v).toFixed(2));
+  text('bankroll', 'bankroll_usd', (v) => '$' + Number(v).toFixed(2)); text('max_open', 'max_open', fInt);
+  text('t_found', 'pools_found', fInt); text('t_elig', 'pools_eligible', fInt); text('t_liq', 'pools_meeting_liq_filter', fInt);
+  text('t_candles', 'candles_stored', fInt); text('t_trades', 'paper_trades', fInt); text('t_tests', 'tests_passing', fInt);
+  text('pg_done', 'pools_downloaded', fInt); text('pg_elig', 'pools_eligible', fInt);
+  text('pct', 'pct', (v) => d3.format('.0f')(v) + '%', 'progress');
+  dash.draw('bar', (e) => { const r = first('progress'); e.style.width = r ? Math.min(100, r.pct) + '%' : '0%'; });
+
+  const flag = (name, field, onTxt, offTxt, onCls, offCls) => dash.draw(name, (e) => {
+    const r = first('summary'); const chip = e.parentElement;
+    chip.classList.remove('ok', 'bad', 'warn', 'mute');
+    if (!r) { e.textContent = '—'; chip.classList.add('mute'); return; }
+    const on = !!r[field]; e.textContent = on ? onTxt : offTxt; chip.classList.add(on ? onCls : offCls);
+  });
+  flag('live_v', 'live_trading', 'ON', 'OFF', 'bad', 'ok');
+  flag('kill_v', 'kill_file', 'PRESENT, entries halted', 'not present', 'warn', 'ok');
+
+  const statusCls = (s) => (s === 'done' || s === 'OK' || s === 'downloaded') ? 'ok-t' : (s === 'active' || s === 'waiting') ? 'warn-t' : (s === 'excluded' || /BLOCK|FAIL|HTTP/.test(s)) ? 'bad-t' : 'mute-t';
+  dash.draw('step', (e) => {
+    const t = rowsOf('tasks').find((x) => String(x.task) === e.dataset.task);
+    e.classList.remove('ok', 'warn', 'mute');
+    if (!t) { e.textContent = '—'; e.classList.add('mute'); return; }
+    e.textContent = t.status === 'done' ? 'built' : t.status === 'active' ? 'in progress' : 'planned';
+    e.classList.add(t.status === 'done' ? 'ok' : t.status === 'active' ? 'warn' : 'mute');
+  });
+
+  dash.draw('phases', (e) => {
+    const rows = rowsOf('phases');
+    e.replaceChildren(...rows.map((p, i) => {
+      const row = el('div', 'phase'); const bar = el('div', 'bar'); const fill = el('span'); fill.style.width = (100 * p.done / p.total) + '%'; bar.appendChild(fill);
+      const n = el('b', '', p.done + ' / ' + p.total); n.dataset.source = 'phases'; n.dataset.field = 'done'; n.dataset.row = String(i);
+      const lab = el('span', '', p.phase); lab.dataset.source = 'phases'; lab.dataset.field = 'phase'; lab.dataset.row = String(i);
+      row.append(lab, bar, n); return row;
+    }));
+  });
+
+  /* ---- tables ---- */
+  const fillTable = (body, rows, cols) => body.replaceChildren(...rows.map((r) => {
+    const tr = document.createElement('tr'); tr.dataset.key = String(r[cols.key]);
+    cols.cells.forEach(([f, cls, fmt]) => { const td = el('td', typeof cls === 'function' ? cls(r) : cls, fmt ? fmt(r[f]) : String(r[f])); tr.appendChild(td); });
+    return tr;
+  }));
+  dash.draw('tasks_body', (e) => fillTable(e, rowsOf('tasks'), { key: 'task', cells: [['task', 'r'], ['title', ''], ['phase', 'mute-t'], ['status', (r) => statusCls(r.status)], ['note', 'w']] }));
+  dash.draw('net_body', (e) => fillTable(e, rowsOf('network'), { key: 'check', cells: [['check', ''], ['host', 'mute-t'], ['status', (r) => statusCls(r.status)], ['latency_s', 'r'], ['evidence', 'w']] }));
+
+  let ruleGroup = '';
+  dash.draw('rule_select', (s) => {
+    const groups = [...new Set(rowsOf('rules_view').map((r) => r.group))];
+    s.replaceChildren(new Option('All groups', ''), ...groups.map((g) => new Option(g, g)));
+    s.value = ruleGroup; s.onchange = () => { ruleGroup = s.value; dash.draw('rules_body'); };
+  });
+  dash.draw('rules_body', (e) => fillTable(e, rowsOf('rules_view').filter((r) => !ruleGroup || r.group === ruleGroup),
+    { key: 'key', cells: [['group', 'mute-t'], ['name', ''], ['value', 'r'], ['unit', 'mute-t'], ['why', 'w']] }));
+
+  let poolSort = { k: 'liq', dir: -1 }, poolDex = '', poolQ = '', poolShown = 12;
+  dash.draw('dex_select', (s) => {
+    s.replaceChildren(new Option('All exchanges', ''), ...rowsOf('by_dex').map((d) => new Option(d.dex, d.dex)));
+    s.value = poolDex; s.onchange = () => { poolDex = s.value; poolShown = 12; dash.draw('pool_body'); dash.draw('pool_count'); };
+  });
+  const filtered = () => rowsOf('pool_view').filter((p) => (!poolDex || p.dex === poolDex) && (!poolQ || (p.name + ' ' + p.dex).toLowerCase().includes(poolQ)))
+    .sort((a, b) => { const x = a[poolSort.k], y = b[poolSort.k]; return (typeof x === 'string' ? x.localeCompare(y) : x - y) * poolSort.dir; });
+  dash.draw('pool_body', {
+    mount: (e) => {
+      const q = document.getElementById('pool-q'); if (q) q.oninput = () => { poolQ = q.value.trim().toLowerCase(); poolShown = 12; dash.draw('pool_body'); dash.draw('pool_count'); };
+      e.closest('table').querySelectorAll('th.sortable').forEach((th) => { th.tabIndex = 0;
+        const go = () => { const k = th.dataset.sort; poolSort = { k, dir: poolSort.k === k ? -poolSort.dir : (k === 'name' || k === 'dex' || k === 'state' ? 1 : -1) }; dash.draw('pool_body'); };
+        th.onclick = go; th.onkeydown = (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); go(); } }; });
+      return null;
+    },
+    update: (e) => fillTable(e, filtered().slice(0, poolShown), { key: 'id', cells: [['name', ''], ['dex', 'mute-t'], ['age_txt', 'r'], ['liq_txt', 'r'], ['state', (r) => statusCls(r.state)]] }),
+  });
+  dash.draw('pool_count', (e) => {
+    const all = rowsOf('pool_view'); if (!all.length) { e.textContent = ''; return; }
+    const n = filtered().length;
+    e.textContent = 'Showing ' + Math.min(poolShown, n) + ' of ' + n + ' pools. Click a column heading to sort.';
+  });
+
+  /* ---- timeline ---- */
+  dash.draw('timeline', (ol) => {
+    const rows = rowsOf('activity');
+    ol.replaceChildren(...rows.map((a, i) => {
+      const li = el('li'); const when = el('span', 'when', a.date); when.dataset.source = 'activity'; when.dataset.field = 'date'; when.dataset.row = String(i);
+      const what = el('div', 'what'); const t = el('h3', '', a.title); t.dataset.source = 'activity'; t.dataset.field = 'title'; t.dataset.row = String(i);
+      const d = el('p', '', a.detail); d.dataset.source = 'activity'; d.dataset.field = 'detail'; d.dataset.row = String(i);
+      what.append(t, d); li.append(when, what); return li;
+    }));
+  });
+
+  /* ---- charts ---- */
+  const placeholder = (svg, msg, h) => { const s = d3.select(svg); s.selectAll('*').remove(); svg.setAttribute('viewBox', '0 0 300 ' + h); svg.style.height = h + 'px'; s.append('text').attr('x', 0).attr('y', 20).text(msg); };
+
+  const hbars = (svg, rows, labelKey, valueKey, colorOf) => {
+    const s = d3.select(svg); s.selectAll('*').remove();
+    const w = svg.clientWidth || 340, rowH = 28, h = rows.length * rowH + 6;
+    svg.setAttribute('viewBox', '0 0 ' + w + ' ' + h); svg.style.height = h + 'px';
+    const labW = Math.min(150, Math.max(90, w * 0.38));
+    const x = d3.scaleLinear([0, d3.max(rows, (d) => d[valueKey]) || 1], [0, Math.max(30, w - labW - 46)]);
+    rows.forEach((d, i) => {
+      const y = i * rowH + 3;
+      s.append('text').attr('x', 0).attr('y', y + 16).text(d[labelKey]);
+      s.append('rect').attr('x', labW).attr('y', y + 4).attr('height', 14).attr('rx', 3).attr('width', Math.max(2, x(d[valueKey]))).style('fill', colorOf(d));
+      s.append('text').attr('x', labW + Math.max(2, x(d[valueKey])) + 6).attr('y', y + 16).text(d[valueKey]);
+    });
+  };
+  dash.draw('dex_chart', (svg) => { const r = rowsOf('by_dex'); if (!r.length) return placeholder(svg, 'Waiting for pool data', 40); hbars(svg, r, 'dex', 'count', () => dash.colors[0]); });
+  dash.draw('band_chart', (svg) => {
+    const r = rowsOf('bands'); if (!r.length) return placeholder(svg, 'Waiting for pool data', 40);
+    hbars(svg, r, 'band', 'count', (d) => d.kind === 'pass' ? 'var(--color-ok)' : d.kind === 'excluded' ? 'var(--color-bad)' : 'var(--color-fg-muted)');
+  });
+
+  dash.draw('hist_chart', (svg) => {
+    const rows = rowsOf('history');
+    if (rows.length < 2) return placeholder(svg, 'Trend appears after the second snapshot', 40);
+    const s = d3.select(svg); s.selectAll('*').remove();
+    const w = svg.clientWidth || 340, h = 170, m = { l: 34, r: 10, t: 10, b: 24 };
+    svg.setAttribute('viewBox', '0 0 ' + w + ' ' + h); svg.style.height = h + 'px';
+    const x = d3.scaleLinear(d3.extent(rows, (d) => d.ts), [m.l, w - m.r]);
+    const top = Math.max(rows[rows.length - 1].eligible, d3.max(rows, (d) => d.pools_done));
+    const y = d3.scaleLinear([0, top], [h - m.b, m.t]).nice();
+    s.append('g').selectAll('line').data(y.ticks(4)).join('line').attr('x1', m.l).attr('x2', w - m.r).attr('y1', y).attr('y2', y).style('stroke', 'var(--cds-chart-grid)');
+    s.append('g').selectAll('text').data(y.ticks(4)).join('text').attr('x', m.l - 6).attr('y', (d) => y(d) + 4).attr('text-anchor', 'end').text((d) => d);
+    const tf = d3.utcFormat('%H:%M');
+    s.append('g').selectAll('text').data(x.ticks(4)).join('text').attr('x', x).attr('y', h - 6).attr('text-anchor', 'middle').text((d) => tf(new Date(d * 1000)));
+    const eligY = y(rows[rows.length - 1].eligible);
+    s.append('line').attr('x1', m.l).attr('x2', w - m.r).attr('y1', eligY).attr('y2', eligY).style('stroke', 'var(--cds-chart-reference)').attr('stroke-dasharray', '4 3');
+    s.append('text').attr('x', w - m.r).attr('y', eligY - 5).attr('text-anchor', 'end').text('all eligible pools');
+    s.append('path').attr('d', d3.area().x((d) => x(d.ts)).y0(h - m.b).y1((d) => y(d.pools_done))(rows)).style('fill', dash.colors[0]).style('opacity', 0.15);
+    s.append('path').attr('d', d3.line().x((d) => x(d.ts)).y((d) => y(d.pools_done))(rows)).style('fill', 'none').style('stroke', dash.colors[0]).attr('stroke-width', 2);
+    const last = rows[rows.length - 1];
+    s.append('circle').attr('cx', x(last.ts)).attr('cy', y(last.pools_done)).attr('r', 4).style('fill', dash.colors[0]);
+  });
+
+  dash.draw('scatter', {
+    mount: (box) => { const svg = d3.select(box).append('svg'); const tip = d3.select(box).append('div').attr('class', 'tip').style('display', 'none'); return { svg, tip }; },
+    update: (box, made) => {
+      const pools = rowsOf('pools').filter((p) => p.eligible && p.liq_now_usd > 0);
+      const svg = made.svg, tip = made.tip; svg.selectAll('*').remove();
+      const w = box.clientWidth || 360, h = 300, m = { l: 52, r: 12, t: 12, b: 38 };
+      svg.attr('viewBox', '0 0 ' + w + ' ' + h).style('height', h + 'px');
+      if (!pools.length) { svg.append('text').attr('x', 0).attr('y', 20).text('Waiting for pool data'); return; }
+      const minAge = cfgNum('min_age_h', 48) / 24, maxAge = cfgNum('max_age_h', 336) / 24, floor = cfgNum('min_liq_usd', 50000);
+      const x = d3.scaleLinear([0, Math.max(40, d3.max(pools, (p) => p.age_days) + 1)], [m.l, w - m.r]);
+      const y = d3.scaleLog([Math.min(5e3, d3.min(pools, (p) => p.liq_now_usd)), 6e7], [h - m.b, m.t]);
+      svg.append('rect').attr('x', x(minAge)).attr('width', x(maxAge) - x(minAge)).attr('y', m.t).attr('height', y(floor) - m.t).style('fill', 'var(--color-ok)').style('opacity', 0.1);
+      svg.append('text').attr('x', x(minAge) + 6).attr('y', m.t + 14).text('strategy window');
+      const yt = [1e4, 1e5, 1e6, 1e7].filter((t) => t >= y.domain()[0] && t <= y.domain()[1]);
+      svg.append('g').selectAll('line').data(yt).join('line').attr('x1', m.l).attr('x2', w - m.r).attr('y1', y).attr('y2', y).style('stroke', 'var(--cds-chart-grid)');
+      svg.append('g').selectAll('text').data(yt).join('text').attr('x', m.l - 6).attr('y', (d) => y(d) + 4).attr('text-anchor', 'end').text((d) => compact(d));
+      svg.append('g').selectAll('text').data(x.ticks(6)).join('text').attr('x', x).attr('y', h - 20).attr('text-anchor', 'middle').text((d) => d);
+      svg.append('text').attr('x', (m.l + w - m.r) / 2).attr('y', h - 4).attr('text-anchor', 'middle').text('pool age (days)');
+      svg.append('text').attr('x', 0).attr('y', 10).text('liquidity');
+      svg.append('line').attr('x1', m.l).attr('x2', w - m.r).attr('y1', y(floor)).attr('y2', y(floor)).style('stroke', 'var(--cds-chart-reference)').attr('stroke-dasharray', '4 3');
+      svg.append('text').attr('x', w - m.r).attr('y', y(floor) - 5).attr('text-anchor', 'end').text('liquidity floor');
+      svg.append('g').selectAll('circle').data(pools).join('circle').attr('cx', (p) => x(p.age_days)).attr('cy', (p) => y(p.liq_now_usd)).attr('r', 4.5)
+        .style('fill', (p) => p.downloaded ? 'var(--color-ok)' : 'var(--color-fg-muted)').style('opacity', 0.75)
+        .on('mousemove', (ev, p) => { const r = box.getBoundingClientRect(); tip.style('display', 'block').style('left', Math.min(ev.clientX - r.left + 12, w - 200) + 'px').style('top', (ev.clientY - r.top + 12) + 'px')
+          .text(p.name + ' · ' + p.dex + ' · ' + p.age_days + ' d · ' + compact(p.liq_now_usd) + (p.downloaded ? ' · history ready' : ' · waiting')); })
+        .on('mouseleave', () => tip.style('display', 'none'));
+    },
+  });
+</script>

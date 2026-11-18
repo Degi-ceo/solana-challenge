@@ -1,0 +1,94 @@
+{
+ "data": [
+  {
+   "id": "solana_Czfq3xZZDmsdGdUyrNLtRhGc47cXcZtLG4crryfu44zE",
+   "type": "pool",
+   "attributes": {
+    "address": "Czfq3xZZDmsdGdUyrNLtRhGc47cXcZtLG4crryfu44zE",
+    "name": "SOL / USDC",
+    "pool_created_at": "2023-07-05T14:34:02Z",
+    "reserve_in_usd": "18025231.0805"
+   },
+   "relationships": {
+    "base_token": {
+     "data": {
+      "id": "solana_So11111111111111111111111111111111111111112",
+      "type": "token"
+     }
+    },
+    "quote_token": {
+     "data": {
+      "id": "solana_EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+      "type": "token"
+     }
+    },
+    "dex": {
+     "data": {
+      "id": "orca",
+      "type": "dex"
+     }
+    }
+   }
+  },
+  {
+   "id": "solana_BwNJma5cJzn9jobrsc4d7UuWHekjai1B7oUdRzRnVqAM",
+   "type": "pool",
+   "attributes": {
+    "address": "BwNJma5cJzn9jobrsc4d7UuWHekjai1B7oUdRzRnVqAM",
+    "name": "SOL / USDC",
+    "pool_created_at": "2026-05-22T14:21:27Z",
+    "reserve_in_usd": "468502.4937"
+   },
+   "relationships": {
+    "base_token": {
+     "data": {
+      "id": "solana_So11111111111111111111111111111111111111112",
+      "type": "token"
+     }
+    },
+    "quote_token": {
+     "data": {
+      "id": "solana_EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+      "type": "token"
+     }
+    },
+    "dex": {
+     "data": {
+      "id": "zerofi",
+      "type": "dex"
+     }
+    }
+   }
+  },
+  {
+   "id": "solana_6WS9iYUuHBsPNUes6tnZSJNGXc5EqbirEqk1cutBG9p8",
+   "type": "pool",
+   "attributes": {
+    "address": "6WS9iYUuHBsPNUes6tnZSJNGXc5EqbirEqk1cutBG9p8",
+    "name": "ANT / SOL",
+    "pool_created_at": "2026-11-16T16:56:34Z",
+    "reserve_in_usd": "0.000401885798907546"
+   },
+   "relationships": {
+    "base_token": {
+     "data": {
+      "id": "solana_ELR9i6Z7uhtZMWqkySYNnDhviSuSMA7nnyZ1BocKkEK",
+      "type": "token"
+     }
+    },
+    "quote_token": {
+     "data": {
+      "id": "solana_So11111111111111111111111111111111111111112",
+      "type": "token"
+     }
+    },
+    "dex": {
+     "data": {
+      "id": "pumpswap",
+      "type": "dex"
+     }
+    }
+   }
+  }
+ ]
+}

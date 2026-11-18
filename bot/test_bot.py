@@ -27,7 +27,7 @@ class Base(unittest.TestCase):
     def setUp(self):
         self.db = bot.db_connect(":memory:")
         self.pairs = {}
-        bot.discover = lambda: {a: "boost_top" for a in self.pairs}
+        bot.discover = lambda cfg=None: {a: "boost_top" for a in self.pairs}
         bot.fetch_pairs = lambda addrs, qw=None: {a: self.pairs[a] for a in addrs if a in self.pairs}
         bot.onchain_check = lambda cfg, addr: (True, "ok", 10.0)
 

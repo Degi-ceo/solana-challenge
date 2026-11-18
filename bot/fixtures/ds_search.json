@@ -1,0 +1,206 @@
+{
+ "schemaVersion": "1.0.0",
+ "pairs": [
+  {
+   "chainId": "solana",
+   "dexId": "pumpswap",
+   "pairAddress": "2uF4Xh61rDwxnG9woyxsVQP7zuA6kLFpb3NvnRQeoiSd",
+   "baseToken": {
+    "address": "pumpCmXqMfrsAkQ5r49WcJnRayYRqmXz6ae8H7H9Dfn",
+    "name": "Pump",
+    "symbol": "PUMP"
+   },
+   "quoteToken": {
+    "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+    "name": "USD Coin",
+    "symbol": "USDC"
+   },
+   "priceUsd": "0.002700",
+   "txns": {
+    "m5": {
+     "buys": 13,
+     "sells": 0
+    },
+    "h1": {
+     "buys": 124,
+     "sells": 138
+    },
+    "h6": {
+     "buys": 735,
+     "sells": 801
+    },
+    "h24": {
+     "buys": 4296,
+     "sells": 5938
+    }
+   },
+   "volume": {
+    "h24": 3774813.32,
+    "h6": 716657.94,
+    "h1": 136217.31,
+    "m5": 5530.97
+   },
+   "priceChange": {
+    "m5": 0.1,
+    "h1": 0.2,
+    "h6": -0.06,
+    "h24": -2.62
+   },
+   "liquidity": {
+    "base": 3441447699,
+    "quote": 9270081,
+    "usd": 18563144.08
+   },
+   "pairCreatedAt": 1752512149000
+  },
+  {
+   "chainId": "solana",
+   "dexId": "orca",
+   "pairAddress": "BofA2ViUSudPBTUms2KRuG6AHNeMawjNfwqTJDgx5BKW",
+   "baseToken": {
+    "address": "pumpCmXqMfrsAkQ5r49WcJnRayYRqmXz6ae8H7H9Dfn",
+    "name": "Pump",
+    "symbol": "PUMP"
+   },
+   "quoteToken": {
+    "address": "So11111111111111111111111111111111111111112",
+    "name": "Wrapped SOL",
+    "symbol": "SOL"
+   },
+   "priceUsd": "0.002704",
+   "txns": {
+    "m5": {
+     "buys": 17,
+     "sells": 0
+    },
+    "h1": {
+     "buys": 227,
+     "sells": 181
+    },
+    "h6": {
+     "buys": 1234,
+     "sells": 972
+    },
+    "h24": {
+     "buys": 10189,
+     "sells": 9329
+    }
+   },
+   "volume": {
+    "h24": 1915781.22,
+    "h6": 252084.5,
+    "h1": 63869.67,
+    "m5": 2752.39
+   },
+   "priceChange": {
+    "m5": 0.38,
+    "h1": -0.43,
+    "h6": 0.28,
+    "h24": -1.64
+   },
+   "liquidity": {
+    "base": 467974164,
+    "quote": 3171.2664,
+    "usd": 1502071.61
+   },
+   "pairCreatedAt": 1757950458000
+  },
+  {
+   "chainId": "solana",
+   "dexId": "pancakeswap",
+   "pairAddress": "5YPxToTobawvkbn5rkWKYDhZqHf5v6LAtRLNPGiq6U2A",
+   "baseToken": {
+    "address": "pumpCmXqMfrsAkQ5r49WcJnRayYRqmXz6ae8H7H9Dfn",
+    "name": "Pump",
+    "symbol": "PUMP"
+   },
+   "quoteToken": {
+    "address": "So11111111111111111111111111111111111111112",
+    "name": "Wrapped SOL",
+    "symbol": "SOL"
+   },
+   "priceUsd": "0.002701",
+   "txns": {
+    "m5": {
+     "buys": 33,
+     "sells": 42
+    },
+    "h1": {
+     "buys": 360,
+     "sells": 433
+    },
+    "h6": {
+     "buys": 1836,
+     "sells": 2136
+    },
+    "h24": {
+     "buys": 12795,
+     "sells": 12630
+    }
+   },
+   "volume": {
+    "h24": 99967.05,
+    "h6": 13931.63,
+    "h1": 2557.92,
+    "m5": 196.05
+   },
+   "priceChange": {
+    "m5": 0.21,
+    "h1": -0.16,
+    "h6": 0.28,
+    "h24": -2
+   },
+   "liquidity": {
+    "base": 3817708,
+    "quote": 42.3041,
+    "usd": 13464.27
+   }
+  },
+  {
+   "chainId": "bsc",
+   "dexId": "pancakeswap",
+   "pairAddress": "0x90345Fbe6DA637322015129De38d3166f98aac9c",
+   "baseToken": {
+    "address": "0xB7C0007ab75350c582d5eAb1862b872B5cF53F0C",
+    "name": "pumpBTC Governance token",
+    "symbol": "PUMP"
+   },
+   "quoteToken": {
+    "address": "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c",
+    "name": "Wrapped BNB",
+    "symbol": "WBNB"
+   },
+   "priceUsd": "0.003969",
+   "txns": {
+    "m5": {
+     "buys": 0,
+     "sells": 0
+    },
+    "h1": {
+     "buys": 0,
+     "sells": 0
+    },
+    "h6": {
+     "buys": 0,
+     "sells": 0
+    },
+    "h24": {
+     "buys": 6,
+     "sells": 4
+    }
+   },
+   "volume": {
+    "h24": 12.97
+   },
+   "priceChange": {
+    "h24": -3.12
+   },
+   "liquidity": {
+    "base": 11793501,
+    "quote": 62.02581,
+    "usd": 83596
+   },
+   "pairCreatedAt": 1743487437000
+  }
+ ]
+}
