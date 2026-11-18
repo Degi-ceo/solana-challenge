@@ -125,11 +125,12 @@ def collect_universe(db, min_age_d=2.0, max_age_d=40.0, min_liq=5_000):
 
 # ---------------------------------------------------------------- candles
 
-def download_candles(db, days, max_pools=None):
+def download_candles(db, days, max_pools=None, max_liq_now=50_000_000):
     """5m candles back to `days` days ago (+1 day lookback for h24 features). Resumable per pool."""
     now = time.time()
     target = now - (days + 1) * 86400
-    pools = db.execute("SELECT * FROM pools ORDER BY liq_now DESC").fetchall()
+    # skip blue-chips / implausible reserves (rule fixed before any backtest result); smallest-first would bias, so order by volume
+    pools = db.execute("SELECT * FROM pools WHERE liq_now <= ? ORDER BY vol24_now DESC", (max_liq_now,)).fetchall()
     if max_pools:
         pools = pools[:max_pools]
     for i, pl in enumerate(pools, 1):

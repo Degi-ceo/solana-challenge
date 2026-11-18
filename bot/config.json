@@ -5,7 +5,12 @@
   "bankroll_usd": 5.0,
   "position_usd": 1.0,
   "max_open": 3,
-  "quote_whitelist": ["SOL", "WSOL", "USDC", "USDT"],
+  "quote_whitelist": [
+    "SOL",
+    "WSOL",
+    "USDC",
+    "USDT"
+  ],
   "filters": {
     "min_age_h": 48,
     "max_age_h": 336,
@@ -44,5 +49,8 @@
     "min_closed_trades": 15,
     "min_profit_factor": 1.2,
     "min_net_pnl_usd": 0.0
+  },
+  "universe": {
+    "max_liq_now_usd": 50000000
   }
 }

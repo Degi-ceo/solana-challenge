@@ -92,11 +92,14 @@ def simulate_trade(cs, i_entry, cfg, liq_for_costs, size=None):
 
 # ---------------------------------------------------------------- portfolio replay
 
-def load(db, days, now=None):
+def load(db, days, now=None, max_liq_now=None):
+    """Load pools+candles. Pools with liq_now above max_liq_now are excluded (blue-chips / bad data; rule fixed before results)."""
     now = now or db.execute("SELECT MAX(ts) FROM candles").fetchone()[0] + TF
     start = now - days * 86400
     pools = {}
     for p in db.execute("SELECT * FROM pools"):
+        if max_liq_now and (p["liq_now"] or 0) > max_liq_now:
+            continue
         rows = db.execute("SELECT ts,o,h,l,c,v FROM candles WHERE pool=? ORDER BY ts", (p["pool"],)).fetchall()
         if rows:
             pools[p["pool"]] = {"meta": dict(p), "cs": [tuple(r) for r in rows]}
@@ -278,6 +281,6 @@ if __name__ == "__main__":
     import data
     db = data.connect(a.db) if a.db else data.connect()
     cfg = bot.load_cfg()
-    pools, start, end = load(db, a.days)
+    pools, start, end = load(db, a.days, max_liq_now=cfg.get("universe", {}).get("max_liq_now_usd"))
     trades, funnel, signals = run_backtest(pools, start, end, cfg, a.liq_gate, a.skip)
     report(pools, trades, funnel, signals, cfg, a, start, end)
