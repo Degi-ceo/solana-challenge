@@ -17,7 +17,7 @@ OUT = BASE / "data" / "export"
 
 def build(live_net=True):
     export_status.build(OUT, live_net=live_net)
-    names = ["summary", "tasks", "pools", "config", "network", "activity", "history", "paper", "backtest"]
+    names = ["summary", "tasks", "pools", "config", "network", "activity", "history", "paper", "backtest", "costmath", "costsum", "costparts", "watch", "rejects", "readiness", "glossary"]
     snap = {n: json.loads((OUT / f"{n}.json").read_text()) for n in names}
     payload = json.dumps(snap, separators=(",", ":")).replace("</", "<\\/")   # keep the JSON inert inside <script>
     html = TEMPLATE.read_text().replace("/*__DATA__*/", payload)

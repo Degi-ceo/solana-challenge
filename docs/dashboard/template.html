@@ -41,6 +41,7 @@
   .tab { appearance: none; background: none; border: 0; border-bottom: 2px solid transparent; color: var(--ink2); font: inherit; font-weight: 500; padding: 10px 14px; min-height: 44px; cursor: pointer; white-space: nowrap; }
   .tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
   .tab:hover { color: var(--ink); }
+  @media (max-width: 520px) { .tabs { gap: 0; } .tab { flex: 1 1 auto; padding: 10px 8px; font-size: 14px; } }
 
   main { padding-top: 24px; padding-bottom: 56px; }
   .panel[hidden] { display: none; }
@@ -66,6 +67,9 @@
   /* ---- figures ---- */
   .figs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
   @media (min-width: 860px) { .figs { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+  .figs.five { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  @media (min-width: 900px) { .figs.five { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+  .figs.five .fig:last-child { grid-column: 1 / -1; } @media (min-width: 900px) { .figs.five .fig:last-child { grid-column: auto; } }
   .fig { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
   .fig .v { font-size: 32px; font-weight: 600; line-height: 1.15; letter-spacing: -.01em; }
   .fig .l { font-size: 14px; font-weight: 500; }
@@ -117,11 +121,13 @@
   td.num { font-variant-numeric: tabular-nums; }
   @media (max-width: 640px) {
     table.cards thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
-    table.cards, table.cards tbody, table.cards tr, table.cards td { display: block; width: 100%; }
-    table.cards tr { border-top: 1px solid var(--line); padding: 12px 0; }
-    table.cards td { border: 0; padding: 2px 0; display: flex; justify-content: space-between; gap: 12px; text-align: right; }
-    table.cards td::before { content: attr(data-label); color: var(--ink2); font-size: 13px; text-align: left; flex: none; }
-    table.cards td.r { text-align: right; }
+    table.cards, table.cards tbody { display: block; width: 100%; }
+    table.cards tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 16px; border-top: 1px solid var(--line); padding: 12px 0; }
+    table.cards td { border: 0; padding: 0; display: block; text-align: left; min-width: 0; }
+    table.cards td::before { content: attr(data-label); display: block; color: var(--ink2); font-size: 12px; }
+    table.cards td:first-child, table.cards td:last-child { grid-column: 1 / -1; }
+    table.cards td:first-child { font-weight: 600; } table.cards td:first-child::before { display: none; }
+    table.cards td.r { text-align: left; padding-right: 0; }
   }
 
   .controls { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
@@ -141,6 +147,26 @@
   .timeline > li:first-child { border-top: 0; padding-top: 0; }
   .timeline .when { font-size: 13px; color: var(--ink2); }
   @media (max-width: 560px) { .timeline > li { grid-template-columns: minmax(0, 1fr); } }
+  .gates > li { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; gap: 2px 10px; padding: 10px 0; border-top: 1px solid var(--line); align-items: start; }
+  .gates > li:first-child { border-top: 0; padding-top: 0; }
+  .gi { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 700; border: 1.5px solid var(--ink3); color: var(--ink2); margin-top: 2px; }
+  .gi.pass { background: var(--good); border-color: var(--good); color: #fff; } .gi.fail { background: var(--bad); border-color: var(--bad); color: #fff; }
+  .gates .gt { font-weight: 500; } .gates .gd { font-size: 13px; color: var(--ink2); } .gates .gs { font-size: 13px; color: var(--ink2); white-space: nowrap; }
+  @media (max-width: 520px) { .gates > li { grid-template-columns: 26px minmax(0, 1fr); } .gates .gs { grid-column: 2; } }
+  .chartbox { position: relative; }
+  .chartbox svg { display: block; width: 100%; height: auto; overflow: visible; }
+  .chartbox svg text { fill: var(--ink2); font-size: 12px; font-family: var(--font); }
+  .tip { position: absolute; pointer-events: none; z-index: 5; background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 13px; line-height: 1.4; box-shadow: 0 4px 16px rgba(0,0,0,.18); white-space: nowrap; }
+  .tip b { font-weight: 600; }
+  .kv { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+  .kv > div { border: 1px solid var(--line); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 2px; }
+  .kv .k { font-size: 13px; color: var(--ink2); } .kv .v { font-size: 22px; font-weight: 600; line-height: 1.2; } .kv .n { font-size: 12px; color: var(--ink2); }
+  .callout { border-left: 3px solid var(--accent); background: var(--wash); border-radius: 0 8px 8px 0; padding: 12px 14px; font-size: 14px; }
+  .csv { width: 100%; min-height: 110px; font: 12px/1.4 ui-monospace, Menlo, monospace; background: var(--wash); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
+  .row-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
+  dl.gl { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  @media (min-width: 760px) { dl.gl { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 28px; } }
+  dl.gl dt { font-weight: 600; } dl.gl dd { font-size: 14px; color: var(--ink2); }
   .empty { border: 1px dashed var(--line); border-radius: 10px; padding: 16px; color: var(--ink2); font-size: 14px; }
   .stale { color: var(--ink); }
   @media (prefers-reduced-motion: no-preference) { .meter > i { transition: width .4s ease; } }
@@ -164,11 +190,23 @@
         <div class="card" id="now"></div>
         <div class="card needs" id="needs"></div>
       </div>
-      <div class="figs" id="figs"></div>
+      <div class="figs five" id="figs"></div>
       <div class="grid2 even">
         <div class="stack"><div class="card" id="verdict"></div><div class="card" id="risk"></div></div>
         <div class="card" id="plan"></div>
       </div>
+    </div>
+  </section>
+
+  <section class="panel" id="p-strategy" role="tabpanel" aria-labelledby="t-strategy" hidden>
+    <div class="stack">
+      <div class="card" id="trade"></div>
+      <div class="grid2 even">
+        <div class="card" id="rejects"></div>
+        <div class="card" id="ready"></div>
+      </div>
+      <div class="card" id="watch"></div>
+      <div class="card" id="backtest"></div>
     </div>
   </section>
 
@@ -180,7 +218,7 @@
       </div>
       <div class="grid2 even">
         <div class="card" id="bands"></div>
-        <div class="card" id="backtest"></div>
+        <div class="card" id="quality"></div>
       </div>
       <div class="card" id="explorer"></div>
     </div>
@@ -197,6 +235,7 @@
     <div class="stack">
       <div class="card" id="sources"></div>
       <div class="card" id="journal"></div>
+      <div class="card" id="glossary"></div>
       <div class="card" id="limits"></div>
     </div>
   </section>
@@ -254,7 +293,7 @@
     chip(stale ? 'warn' : '', 'Snapshot ' + ageTxt));
 
   /* ---------- tabs ---------- */
-  var TABS = [['overview', 'Overview'], ['data', 'Data'], ['rules', 'Rules'], ['log', 'Log']];
+  var TABS = [['overview', 'Overview'], ['strategy', 'Strategy'], ['data', 'Data'], ['rules', 'Rules'], ['log', 'Log']];
   var tabs = $('tabs');
   TABS.forEach(function (t, i) {
     var b = el('button', 'tab', t[1]); b.id = 't-' + t[0]; b.setAttribute('role', 'tab'); b.setAttribute('aria-controls', 'p-' + t[0]); b.dataset.k = t[0];
@@ -269,6 +308,7 @@
     if (!TABS.some(function (t) { return t[0] === k; })) k = 'overview';
     TABS.forEach(function (t) { var on = t[0] === k; $('p-' + t[0]).hidden = !on; var b = $('t-' + t[0]); b.setAttribute('aria-selected', on ? 'true' : 'false'); b.tabIndex = on ? 0 : -1; });
     if (push && location.hash !== '#' + k) { try { history.replaceState(null, '', '#' + k); } catch (e) { location.hash = k; } }
+    if (k === 'strategy' && typeof drawPayoff === 'function') drawPayoff();
     window.scrollTo(0, 0);
   }
   window.addEventListener('hashchange', function () { show(location.hash.slice(1)); });
@@ -279,6 +319,16 @@
   add(now, meter(pct, 'History downloaded'));
   add(now, add(el('div', 'meter-row'), el('span', '', fInt.format(done) + ' of ' + fInt.format(total) + ' pools'), el('span', '', etaTxt)));
   add(now, add(el('p', 'small'), el('b', '', 'Next: '), document.createTextNode(S.now_next)));
+
+  try {
+    var prev = JSON.parse(localStorage.getItem('bm-last') || 'null');
+    if (prev && prev.updated_ts !== S.updated_ts) {
+      var dp = done - prev.done, dc = S.candles_stored - prev.candles, dt = nDoneTasks() - prev.tasks;
+      add(now, add(el('p', 'small'), el('b', '', 'Since your last visit: '), document.createTextNode((dp >= 0 ? '+' : '') + dp + ' pools downloaded, ' + (dc >= 0 ? '+' : '') + fInt.format(dc) + ' candles, ' + (dt >= 0 ? '+' : '') + dt + ' tasks finished.')));
+    }
+    localStorage.setItem('bm-last', JSON.stringify({ updated_ts: S.updated_ts, done: done, candles: S.candles_stored, tasks: nDoneTasks() }));
+  } catch (e) { /* storage unavailable: skip */ }
+  function nDoneTasks() { return D.tasks.filter(function (t) { return t.status === 'done'; }).length; }
 
   var needs = $('needs');
   add(needs, el('p', 'eyebrow', 'Needs from you'));
@@ -293,9 +343,10 @@
 
   /* ---------- overview: figures ---------- */
   var tr = S.paper_trades, figs = $('figs');
-  [['—', 'Paper profit / loss', tr ? '' : 'No trades yet'], [fInt.format(tr), 'Paper trades', 'Verdict needs ' + cfg.min_closed_trades],
-   [Math.round(pct) + '%', 'History coverage', fInt.format(done) + ' of ' + fInt.format(total) + ' pools'], [fInt.format(S.tests_passing), 'Automated tests passing', 'look-ahead, exits, costs']
-  ].forEach(function (f) { add(figs, add(el('div', 'fig'), el('span', 'l', f[1]), el('span', 'v', f[0]), el('span', 's', f[2]))); });
+  [['Equity', money(S.bankroll_usd), 'Started with ' + money(S.bankroll_usd)], ['Paper profit / loss', tr ? '' : '\u2014', tr ? '' : 'No trades yet'],
+   ['Paper trades', fInt.format(tr), 'Verdict needs ' + cfg.min_closed_trades], ['Challenge clock', S.run_started ? 'Day 1' : 'Day 0', S.run_started ? 'of ' + S.paper_days_total : 'Paper run not started \u00b7 7 days once it starts'],
+   ['SOL price', S.sol_usd ? '$' + S.sol_usd.toFixed(2) : '\u2014', 'Jupiter quote at snapshot']
+  ].forEach(function (f) { add(figs, add(el('div', 'fig'), el('span', 'l', f[0]), el('span', 'v', f[1]), el('span', 's', f[2]))); });
 
   /* ---------- overview: verdict ---------- */
   var vd = $('verdict');
@@ -336,12 +387,12 @@
   add(cv, cl);
 
   /* ---------- data: funnel ---------- */
-  function bars(items, max) {
+  function bars(items, max, fmt) {
     var w = el('div', 'bars');
     items.forEach(function (it) {
       var b = el('div', 'bar'), lb = el('div', 'lb', it.label); if (it.sub) add(lb, el('small', '', it.sub));
-      var trk = el('div', 'trk'), f = el('div', 'fill' + (it.kind ? ' ' + it.kind : '')); f.style.width = (100 * it.value / Math.max(1, max)) + '%'; add(trk, f);
-      add(b, lb, trk, el('span', 'v', fInt.format(it.value))); add(w, b);
+      var trk = el('div', 'trk'), f = el('div', 'fill' + (it.kind ? ' ' + it.kind : '')); f.style.width = (100 * it.value / (max > 0 ? max : 1)) + '%'; add(trk, f);
+      add(b, lb, trk, el('span', 'v', fmt ? fmt(it.value) : fInt.format(it.value))); add(w, b);
     });
     return w;
   }
@@ -364,14 +415,6 @@
   add(bd, bars(bItems, Math.max.apply(null, bItems.map(function (i) { return i.value; }))), el('p', 'small', 'Blue bars meet the liquidity floor; grey bars fall below it.'),
     tableView(['Band', 'Pools'], bItems.map(function (i) { return [i.label, i.value]; })));
 
-  /* ---------- data: backtest ---------- */
-  var bt = $('backtest'); head(bt, 'Backtest', D.backtest.length ? 'Latest result' : 'Not run yet');
-  if (!D.backtest.length) {
-    add(bt, add(el('div', 'empty'), document.createTextNode('The 14-day backtest runs when the price history finishes downloading. Its trades, net profit after costs, profit factor and drawdown will appear here, next to a random-entry comparison.')));
-  } else {
-    var bl = el('ul', 'rows'); D.backtest.forEach(function (r) { var li = el('li'); add(li, el('span', 'nm', r.label), el('span', 'val', r.value)); if (r.note) add(li, el('span', 'ds', r.note)); add(bl, li); }); add(bt, bl);
-  }
-
   /* ---------- data: explorer ---------- */
   var ex = $('explorer'); head(ex, 'Pool explorer', 'Every pool the bot knows about');
   var state = { q: '', dex: '', st: 'elig', sort: 'liq', dir: -1, n: 15 };
@@ -392,7 +435,8 @@
   });
   add(thead, htr); var tbody = el('tbody'); add(tbl, thead, tbody); add(tw, tbl); add(ex, tw);
   var cnt = el('p', 'small'); var more = el('button', 'btn', 'Show more'); more.type = 'button'; more.onclick = function () { state.n += 25; draw(); };
-  add(ex, cnt, more);
+  var exAct = add(el('div', 'row-actions'), more); exAct.appendChild(csvButton(ex, function () { return csvOf([['name', 'pool'], ['dex', 'exchange'], ['age_days', 'age_days'], ['liq_now_usd', 'liquidity_usd'], ['downloaded', 'history_downloaded'], ['eligible', 'eligible']], pools); }));
+  add(ex, cnt, exAct);
   function pState(p) { return !p.eligible ? 'excluded' : p.downloaded ? 'ready' : 'waiting'; }
   function draw() {
     var rows = pools.filter(function (p) {
@@ -417,6 +461,146 @@
   ss.onchange = function () { state.st = ss.value; state.n = 15; draw(); };
   so.onchange = function () { state.sort = so.value; state.dir = (so.value === 'name' || so.value === 'dex') ? 1 : -1; draw(); };
   draw();
+
+
+  /* ---------- helpers: svg, csv ---------- */
+  var NS = 'http://www.w3.org/2000/svg';
+  function sv(tag, attrs, parent) { var e = document.createElementNS(NS, tag); Object.keys(attrs || {}).forEach(function (k) { e.setAttribute(k, attrs[k]); }); if (parent) parent.appendChild(e); return e; }
+  function csvOf(cols, rows) { return [cols.map(function (c) { return c[1]; }).join(',')].concat(rows.map(function (r) { return cols.map(function (c) { var v = String(r[c[0]] === undefined ? '' : r[c[0]]); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }).join(','); })).join('\n'); }
+  function csvButton(host, getCsv) {
+    var b = el('button', 'btn', 'Copy as CSV'); b.type = 'button'; var box = null;
+    b.onclick = function () {
+      var txt = getCsv();
+      function fallback() { if (!box) { box = el('textarea', 'csv'); box.readOnly = true; box.setAttribute('aria-label', 'CSV text'); host.appendChild(box); } box.value = txt; box.focus(); box.select(); }
+      try { navigator.clipboard.writeText(txt).then(function () { b.textContent = 'Copied'; setTimeout(function () { b.textContent = 'Copy as CSV'; }, 1800); }, fallback); } catch (e) { fallback(); }
+    };
+    return b;
+  }
+  var CS = D.costsum[0], FNAME = { age: 'Age outside ' + minAge + '–' + maxAge + ' days', liq: 'Liquidity below ' + compact(floor), vol24: 'Daily volume below ' + compact(cfg.min_vol24_usd),
+    'vol/liq': 'Volume / liquidity ratio off', h1: '1-hour move outside ' + cfg.h1_change_min + '–' + cfg.h1_change_max + '%', h24: '24-hour move outside ' + cfg.h24_change_min + '–' + cfg.h24_change_max + '%' };
+
+  /* ---------- strategy: trade math ---------- */
+  var tm = $('trade');
+  head(tm, 'Trade math', 'A trade must rise ' + CS.breakeven_pct + '% just to break even',
+    'Computed with the bot\'s own cost functions for one ' + money(S.position_usd) + ' position. Pool depth barely matters at this size, so one reference pool is drawn.');
+  var cbox = el('div', 'chartbox'); add(tm, cbox);
+  function drawPayoff() {
+    cbox.replaceChildren(); var rows = D.costmath, w = Math.max(280, cbox.clientWidth || 640), h = w < 520 ? 250 : 320, m = { l: 52, r: 18, t: 16, b: 44 };
+    var svg = sv('svg', { viewBox: '0 0 ' + w + ' ' + h, role: 'img', 'aria-label': 'Net profit or loss of one trade against the price move, with stop loss, take profit and break-even marked' }, cbox);
+    var ys = rows.map(function (r) { return r.pnl_usd; }), y0 = Math.floor(Math.min.apply(null, ys) * 4) / 4, y1 = Math.ceil(Math.max.apply(null, ys) * 4) / 4;
+    var X = function (v) { return m.l + (v + 50) / 150 * (w - m.l - m.r); }, Y = function (v) { return h - m.b - (v - y0) / (y1 - y0) * (h - m.t - m.b); };
+    for (var g = y0; g <= y1 + 1e-9; g += 0.25) { sv('line', { x1: m.l, x2: w - m.r, y1: Y(g), y2: Y(g), stroke: 'var(--line)', 'stroke-width': 1 }, svg); var t = sv('text', { x: m.l - 8, y: Y(g) + 4, 'text-anchor': 'end' }, svg); t.textContent = (g < 0 ? '-$' : '$') + Math.abs(g).toFixed(2); }
+    [-50, -25, 0, 25, 50, 75, 100].forEach(function (v) { var t = sv('text', { x: X(v), y: h - 22, 'text-anchor': 'middle' }, svg); t.textContent = (v > 0 ? '+' : '') + v + '%'; });
+    var xl = sv('text', { x: (m.l + w - m.r) / 2, y: h - 4, 'text-anchor': 'middle' }, svg); xl.textContent = 'Price move after buying';
+    sv('line', { x1: m.l, x2: w - m.r, y1: Y(0), y2: Y(0), stroke: 'var(--ink3)', 'stroke-width': 1 }, svg);
+    var narrow = w < 520; [[-CS.stop_pct, (narrow ? 'Stop ' : 'Stop loss ') + (-CS.stop_pct) + '%'], [CS.tp_pct, (narrow ? 'TP +' : 'Take profit +') + CS.tp_pct + '%']].forEach(function (mk) {
+      sv('line', { x1: X(mk[0]), x2: X(mk[0]), y1: m.t, y2: h - m.b, stroke: 'var(--ink3)', 'stroke-width': 1 }, svg);
+      var t = sv('text', { x: X(mk[0]) + (mk[0] < 0 ? -6 : 6), y: m.t + 12, 'text-anchor': mk[0] < 0 ? 'end' : 'start' }, svg); t.textContent = mk[1];
+    });
+    var d = rows.map(function (r, i) { return (i ? 'L' : 'M') + X(r.move_pct).toFixed(1) + ' ' + Y(r.pnl_usd).toFixed(1); }).join(' ');
+    sv('path', { d: d, fill: 'none', stroke: 'var(--accent)', 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }, svg);
+    [[CS.breakeven_pct, 0, 'Break-even +' + CS.breakeven_pct + '%'], [-CS.stop_pct, CS.stop_pnl_usd, ''], [CS.tp_pct, CS.tp_pnl_usd, '']].forEach(function (pt) {
+      sv('circle', { cx: X(pt[0]), cy: Y(pt[1]), r: 5, fill: 'var(--accent)', stroke: 'var(--card)', 'stroke-width': 2 }, svg);
+      if (pt[2]) { var t = sv('text', { x: X(pt[0]) + 8, y: Y(pt[1]) + 18 }, svg); t.textContent = pt[2]; }
+    });
+    var tl = sv('text', { x: X(-CS.stop_pct) + 9, y: Y(CS.stop_pnl_usd) + 18, 'text-anchor': 'start' }, svg); tl.textContent = money(CS.stop_pnl_usd);
+    var tt = sv('text', { x: X(CS.tp_pct) - 8, y: Y(CS.tp_pnl_usd) - 8, 'text-anchor': 'end' }, svg); tt.textContent = '+' + money(CS.tp_pnl_usd);
+    var tip = el('div', 'tip'); tip.hidden = true; cbox.appendChild(tip); var vl = sv('line', { y1: m.t, y2: h - m.b, stroke: 'var(--ink2)', 'stroke-width': 1, visibility: 'hidden' }, svg);
+    var hit = sv('rect', { x: m.l, y: m.t, width: w - m.l - m.r, height: h - m.t - m.b, fill: 'transparent', tabindex: 0 }, svg);
+    function at(clientX) {
+      var r = svg.getBoundingClientRect(), px = (clientX - r.left) * (w / r.width), v = (px - m.l) / (w - m.l - m.r) * 150 - 50, best = rows[0];
+      rows.forEach(function (q) { if (Math.abs(q.move_pct - v) < Math.abs(best.move_pct - v)) best = q; });
+      vl.setAttribute('x1', X(best.move_pct)); vl.setAttribute('x2', X(best.move_pct)); vl.setAttribute('visibility', 'visible');
+      tip.hidden = false; tip.textContent = ''; add(tip, document.createTextNode('Price ' + (best.move_pct > 0 ? '+' : '') + best.move_pct + '%  →  '), el('b', '', (best.pnl_usd < 0 ? '-' : '+') + money(Math.abs(best.pnl_usd))));
+      tip.style.left = Math.min(Math.max(0, X(best.move_pct) * r.width / w + 10), r.width - 170) + 'px'; tip.style.top = '8px';
+    }
+    hit.addEventListener('pointermove', function (e) { at(e.clientX); });
+    hit.addEventListener('pointerleave', function () { tip.hidden = true; vl.setAttribute('visibility', 'hidden'); });
+  }
+  drawPayoff(); var rt; window.addEventListener('resize', function () { clearTimeout(rt); rt = setTimeout(drawPayoff, 120); });
+
+  var kv = el('div', 'kv');
+  [['Cost of a round trip', money(CS.flat_cost_usd, 3), CS.flat_cost_pct + '% of the position, price unchanged'],
+   ['Win / loss size', CS.win_to_loss_ratio + ' : 1', 'take profit ' + money(CS.tp_pnl_usd) + ' vs stop loss ' + money(Math.abs(CS.stop_pnl_usd))],
+   ['Win rate needed to break even', CS.required_win_rate_pct + '%', 'of trades must hit the take profit'],
+   ['Break-even if rent is lost', '+' + CS.breakeven_with_rent_pct + '%', 'rent ' + money(S.rent_usd, 3) + ' (' + S.rent_pct_of_position + '% of position), not modelled yet']
+  ].forEach(function (k) { add(kv, add(el('div'), el('span', 'k', k[0]), el('span', 'v', k[1]), el('span', 'n', k[2]))); });
+  add(tm, kv);
+  var parts = D.costparts, pmax = Math.max.apply(null, parts.map(function (x) { return x.usd; }));
+  add(tm, el('h3', '', 'Where the ' + money(CS.flat_cost_usd, 3) + ' goes'),
+    bars(parts.map(function (x) { return { label: x.part, value: x.usd }; }), pmax, function (v) { return money(v, 4); }));
+  add(tm, add(el('p', 'callout'), el('b', '', 'What this means: '), document.createTextNode('on a $1 position the flat network fee is the biggest cost, so very small trades start with a handicap. The simulation already charges it. Token-account rent is the next big item and is added in the realistic-costs task.')),
+    tableView(['Price move', 'Net result'], D.costmath.map(function (r) { return [(r.move_pct > 0 ? '+' : '') + r.move_pct + '%', money(r.pnl_usd, 3)]; })));
+
+  /* ---------- strategy: why rejected ---------- */
+  var W = D.watch, nPass = W.filter(function (r) { return r.passes; }).length;
+  var rj = $('rejects');
+  head(rj, 'Why pools are rejected', nPass + ' of ' + W.length + ' pools pass every filter right now', 'Pools with price history so far, judged on their latest downloaded candle. One pool can fail several filters.');
+  var rItems = D.rejects.map(function (r) { return { label: FNAME[r.filter], value: r.count, kind: '' }; }).sort(function (a, b) { return b.value - a.value; });
+  add(rj, bars(rItems, Math.max(W.length, 1)), el('p', 'small', 'Liquidity here is today\'s value. Buy pressure is not tested because the free price history has no trade counts.'),
+    tableView(['Filter', 'Pools failing'], rItems.map(function (i) { return [i.label, i.value]; })));
+
+  /* ---------- strategy: readiness ---------- */
+  var rd = $('ready'), nOk = D.readiness.filter(function (g) { return g.status === 'pass'; }).length;
+  head(rd, 'Readiness for real money', nOk + ' of ' + D.readiness.length + ' gates cleared', 'Every gate must be green before live trading is even discussed. Live trading is never switched on from this environment.');
+  var gl = el('ul', 'gates');
+  D.readiness.forEach(function (g) {
+    var li = el('li'); add(li, el('span', 'gi ' + g.status, g.status === 'pass' ? '✓' : g.status === 'fail' ? '✕' : ''), add(el('div'), el('p', 'gt', g.gate), el('p', 'gd', g.detail)),
+      el('span', 'gs', g.status === 'pass' ? 'Passed' : g.status === 'fail' ? 'Failed' : 'Pending')); add(gl, li);
+  });
+  add(rd, gl);
+
+  /* ---------- strategy: watchlist ---------- */
+  var wl = $('watch'); head(wl, 'Watchlist', 'What each downloaded pool would do today', 'Closest to passing first. "Blocked by" names every filter the pool fails.');
+  var wstate = { show: 'all', n: 12 }, wctl = el('div', 'controls'), wsel = el('select'); wsel.id = 'w-show';
+  [['all', 'All pools'], ['near', 'One filter away'], ['pass', 'Passing everything']].forEach(function (o) { add(wsel, new Option(o[1], o[0])); });
+  add(wctl, field('Show', wsel)); add(wl, wctl);
+  var wt = el('table', 'cards'), wh = el('thead'), whr = el('tr'); ['Pool', 'Age', 'Liquidity', '1h', '24h', 'Blocked by'].forEach(function (c, i) { var th = el('th', i > 0 && i < 5 ? 'r' : '', c); th.scope = 'col'; add(whr, th); });
+  add(wh, whr); var wb = el('tbody'); add(wt, wh, wb); add(wl, add(el('div', 'scroll'), wt));
+  var wcnt = el('p', 'small'), wmore = el('button', 'btn', 'Show more'); wmore.type = 'button'; wmore.onclick = function () { wstate.n += 25; wdraw(); };
+  var wact = add(el('div', 'row-actions'), wmore);
+  var wcsv = csvButton(wl, function () { return csvOf([['name', 'pool'], ['dex', 'exchange'], ['age_days', 'age_days'], ['liq_usd', 'liquidity_usd'], ['h1_pct', 'h1_pct'], ['h24_pct', 'h24_pct'], ['failed', 'failed_filters']], W.map(function (r) { return Object.assign({}, r, { failed: r.failed.join(' ') }); })); });
+  add(wact, wcsv); add(wl, wcnt, wact);
+  function wdraw() {
+    var rows = W.filter(function (r) { return wstate.show === 'all' || (wstate.show === 'pass' ? r.passes : r.failed.length === 1); });
+    wb.replaceChildren();
+    rows.slice(0, wstate.n).forEach(function (r) {
+      var tr = el('tr'); function td(label, txt, cls) { var c = el('td', cls || '', txt); c.dataset.label = label; return c; }
+      var blk = td('Blocked by', '');
+      if (r.passes) { add(blk, dot('good'), document.createTextNode(' Passes all filters')); } else { add(blk, dot('warn'), document.createTextNode(' ' + r.failed.map(function (f) { return f === 'h1' ? '1-hour move' : f === 'h24' ? '24-hour move' : f === 'liq' ? 'liquidity' : f === 'vol24' ? 'volume' : f === 'vol/liq' ? 'volume / liquidity' : 'age'; }).join(', '))); }
+      add(tr, td('Pool', r.name), td('Age', r.age_days + ' d', 'r num'), td('Liquidity', compact(r.liq_usd), 'r num'), td('1h', (r.h1_pct > 0 ? '+' : '') + r.h1_pct + '%', 'r num'), td('24h', (r.h24_pct > 0 ? '+' : '') + r.h24_pct + '%', 'r num'), blk); add(wb, tr);
+    });
+    if (!rows.length) { var e = el('tr'), c = el('td', '', 'No pools in this view.'); c.colSpan = 6; add(e, c); add(wb, e); }
+    wcnt.textContent = 'Showing ' + Math.min(wstate.n, rows.length) + ' of ' + rows.length + ' pools.'; wmore.hidden = rows.length <= wstate.n;
+  }
+  wsel.onchange = function () { wstate.show = wsel.value; wstate.n = 12; wdraw(); }; wdraw();
+
+  /* ---------- strategy: backtest ---------- */
+  var bt = $('backtest'); head(bt, 'Backtest', D.backtest.length ? 'Latest result' : 'Not run yet', D.backtest.length ? '' : 'It starts automatically once the price history finishes downloading (' + etaTxt + ').');
+  if (!D.backtest.length) {
+    add(bt, add(el('div', 'empty'), document.createTextNode('When it runs, this panel shows the items below. A negative or inconclusive result gets the same space as a good one.')));
+    var wl2 = el('ul', 'rows');
+    [['Trades and net profit after costs', 'On the same rules and cost model as the live loop.'], ['Profit factor, win rate, biggest drawdown', 'Plus the mix of exit reasons (stop, take profit, trailing, time).'],
+     ['Random-entry comparison', 'Does the strategy beat entering at random times with the same exits and costs?'], ['Confidence range', 'A bootstrap interval, so a lucky run is not mistaken for an edge.'],
+     ['Bias statement', 'Survivorship share, filters that could not be tested, and costs that use today\'s liquidity.']
+    ].forEach(function (r) { add(wl2, add(el('li'), el('span', 'nm', r[0]), el('span', 'ds', r[1]))); }); add(bt, wl2);
+  } else {
+    var bl = el('ul', 'rows'); D.backtest.forEach(function (r) { var li = el('li'); add(li, el('span', 'nm', r.label), el('span', 'val', r.value)); if (r.note) add(li, el('span', 'ds', r.note)); add(bl, li); }); add(bt, bl);
+  }
+
+  /* ---------- data: quality ---------- */
+  var qd = $('quality'); head(qd, 'Can the data be trusted?', 'Known limits of this evidence', 'Stated up front so no result is read more strongly than it deserves.');
+  var ql = el('ul', 'rows');
+  [['Pools with price history', fInt.format(S.pools_with_candles), S.candles_oldest + ' to ' + S.candles_newest + ' UTC, 5-minute candles.'],
+   ['Survivorship', fInt.format(pools.filter(function (p) { return p.liq_now_usd < floor; }).length) + ' of ' + fInt.format(pools.length) + ' below the floor', 'Only pools that exist today are listed; tokens that died are under-represented.'],
+   ['Liquidity history', 'not available', 'Today\'s liquidity is used as a proxy, which can flatter results.'],
+   ['Buy pressure and trade counts', 'not testable', 'The free history has no buy/sell counts, so that filter is skipped in the backtest.'],
+   ['Discovery sources', 'GeckoTerminal only', 'DexScreener boosts are paid promotion and are added, tagged, in the discovery task.']
+  ].forEach(function (r) { add(ql, add(el('li'), el('span', 'nm', r[0]), el('span', 'val', r[1]), el('span', 'ds', r[2]))); }); add(qd, ql);
+
+  /* ---------- log: glossary ---------- */
+  var gs = $('glossary'); head(gs, 'Glossary', 'Terms in plain words');
+  var dl = el('dl', 'gl'); D.glossary.forEach(function (g) { add(dl, add(el('div'), el('dt', '', g.term), el('dd', '', g.meaning))); }); add(gs, dl);
 
   /* ---------- rules ---------- */
   var pp = $('pipeline'); head(pp, 'Pipeline', 'How a trade is decided', 'A pool must pass every step to be bought. Each rejection is counted so you can see which rule removes the most.');

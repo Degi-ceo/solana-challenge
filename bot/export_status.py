@@ -137,6 +137,117 @@ def history_rows(outdir, now, n_done, n_candles, n_elig):
     return [{"time": iso(r["ts"]), "ts": r["ts"], "pools_done": r["pools_done"], "candles": r["candles"], "eligible": r["eligible"]} for r in rows]
 
 
+
+GLOSSARY = [
+    ("Profit factor", "Total money won divided by total money lost. Above 1 means winners outweigh losers; the verdict needs 1.2 or more after costs."),
+    ("Drawdown", "The biggest drop from a previous high point of the account. It shows how painful the worst stretch was."),
+    ("Slippage", "The difference between the price you expect and the price you actually get. It grows when you trade a large amount in a shallow pool."),
+    ("Break-even move", "How far the price must rise after you buy just to get your money back once fees and slippage are paid."),
+    ("Look-ahead bias", "Accidentally using information from the future when testing. It makes results look better than they could ever be in real time."),
+    ("Survivorship bias", "Testing only on tokens that still exist today, so the ones that died or rugged are missing and results look better than reality."),
+    ("Out-of-sample", "Data the settings were never tuned on. Only out-of-sample results count toward the verdict."),
+    ("Walk-forward", "Tune on an earlier period, then test on the following period, so the test is always about the future of the tuning data."),
+    ("Null model", "A dumb baseline that enters at random times with the same exits and costs. A strategy must beat it to claim an edge."),
+    ("Token-2022", "A newer Solana token standard with extensions such as transfer fees or hooks, which can trap or tax sellers."),
+    ("Rent", "A small SOL deposit that Solana holds for each token account. It is refunded only if the account is closed."),
+    ("Liquidity", "How much money sits in the pool. Deeper pools let you buy and sell without moving the price much."),
+]
+
+LEG_FILTERS = ["age", "liq", "vol24", "vol/liq", "h1", "h24"]
+
+
+def sol_price():
+    """SOL/USD from a public Jupiter quote (0.01 SOL -> USDC). None if unreachable."""
+    try:
+        sol = "So11111111111111111111111111111111111111112"
+        usdc = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+        j = bot.http_json(f"https://lite-api.jup.ag/swap/v1/quote?inputMint={sol}&outputMint={usdc}&amount=10000000&slippageBps=50", retries=1, timeout=10)
+        return round(int(j["outAmount"]) / 1e6 / 0.01, 2)
+    except Exception:
+        return None
+
+
+def cost_math(cfg, sol_usd):
+    """Net P&L of one position vs price move, using the bot's own cost functions (no separate formula).
+    Liquidity barely matters at a $1 size (measured), so one reference pool is drawn; cost parts come from ablation."""
+    size, e = cfg["position_usd"], cfg["exit"]
+    liq = 250_000
+
+    def flat_cost(c):
+        fill, qty = bot.fill_buy(1.0, size, liq, c)
+        return size - bot.proceeds_sell(1.0, qty, liq, c)
+
+    def breakeven(c):
+        fill, qty = bot.fill_buy(1.0, size, liq, c)
+        lo, hi = 0.0, 80.0
+        for _ in range(60):
+            mid = (lo + hi) / 2
+            lo, hi = (mid, hi) if bot.proceeds_sell(1 + mid / 100, qty, liq, c) - size < 0 else (lo, mid)
+        return hi
+
+    c = cfg["costs"]
+    total = flat_cost(c)
+    parts = []
+    for label, key in (("Network fees (buy + sell)", "network_fee_usd"), ("DEX swap fees (buy + sell)", "fee_pct"), ("Base slippage (buy + sell)", "slippage_pct")):
+        parts.append({"part": label, "usd": round(total - flat_cost(dict(c, **{key: 0})), 4)})
+    parts.append({"part": "Price impact from pool depth", "usd": round(max(0.0, total - sum(p["usd"] for p in parts)), 4)})
+    fill, qty = bot.fill_buy(1.0, size, liq, c)
+    rows = [{"move_pct": m, "pnl_usd": round(bot.proceeds_sell(1 + m / 100, qty, liq, c) - size, 4)} for m in range(-50, 101, 5)]
+    stop_pnl = bot.proceeds_sell(1 - e["stop_loss_pct"] / 100, qty, liq, c) - size
+    tp_pnl = bot.proceeds_sell(1 + e["take_profit_pct"] / 100, qty, liq, c) - size
+    rent = round(0.00203928 * sol_usd, 3) if sol_usd else None
+    summ = [{"ref_liq_usd": liq, "flat_cost_usd": round(total, 4), "flat_cost_pct": round(100 * total / size, 2),
+             "breakeven_pct": round(breakeven(c), 2),
+             "breakeven_with_rent_pct": round(breakeven(dict(c, network_fee_usd=c["network_fee_usd"] + (rent or 0) / 2)), 2) if rent else None,
+             "stop_pnl_usd": round(stop_pnl, 4), "tp_pnl_usd": round(tp_pnl, 4),
+             "stop_pct": e["stop_loss_pct"], "tp_pct": e["take_profit_pct"],
+             "win_to_loss_ratio": round(tp_pnl / -stop_pnl, 2),
+             "required_win_rate_pct": round(100 * -stop_pnl / (tp_pnl - stop_pnl), 1)}]
+    return rows, parts, summ, rent
+
+
+def readiness(tasks, S, cfg):
+    st = {t[0]: t[2] for t in tasks}
+    g = cfg["go_nogo"]
+    def task(n): return "pass" if st[n] == "done" else "pending"
+    return [
+        {"gate": "Live trading is switched off in config", "status": "pass" if not cfg.get("live", False) else "fail", "detail": "live = " + str(cfg.get("live", False)).lower()},
+        {"gate": "Network and data sources verified", "status": task(0), "detail": "Task 0"},
+        {"gate": "Backtest built and free of look-ahead", "status": "pending" if st[1] != "done" else "pass", "detail": "Task 1, 30 tests passing so far"},
+        {"gate": "Calibrated out-of-sample, verdict is 'edge'", "status": task(3), "detail": "Task 3. 'No edge' or 'inconclusive' keeps this red."},
+        {"gate": "Realistic execution costs applied", "status": task(4), "detail": "Task 4"},
+        {"gate": "Rug and safety checks tested", "status": task(5), "detail": "Task 5"},
+        {"gate": "Executor tested with mocks, sends nothing when off", "status": task(6), "detail": "Task 6"},
+        {"gate": f"At least {g['min_closed_trades']} closed paper trades", "status": "pass" if S["paper_trades"] >= g["min_closed_trades"] else "pending", "detail": f"{S['paper_trades']} so far"},
+        {"gate": f"Profit factor at least {g['min_profit_factor']} after costs", "status": "pending", "detail": "Needs the trades above"},
+        {"gate": "Net profit above zero after costs", "status": "pending", "detail": "Needs the trades above"},
+        {"gate": "Beats the random-entry baseline", "status": "pending", "detail": "Task 1 and 3"},
+        {"gate": "Deployment notes written, key handling reviewed", "status": task(8), "detail": "Task 8"},
+    ]
+
+
+def watchlist(db, cfg, now):
+    """Latest point-in-time features for every eligible pool with candles, run through the same bot.check_features."""
+    import backtest as bt
+    rows, rejects = [], {k: 0 for k in LEG_FILTERS}
+    for p in db.execute("SELECT * FROM pools WHERE liq_now <= ?", (MAX_LIQ,)).fetchall():
+        cs = [tuple(r) for r in db.execute("SELECT ts,o,h,l,c,v FROM candles WHERE pool=? ORDER BY ts", (p["pool"],))]
+        if len(cs) < 300:
+            continue
+        i = len(cs) - 1
+        ft = bt.candle_features(cs, i, p["created_ts"], p["liq_now"])
+        if ft is None:
+            continue
+        failed, _ = bot.check_features(ft, cfg["filters"], skip=("flow",))
+        for f in failed:
+            rejects[f] = rejects.get(f, 0) + 1
+        rows.append({"name": p["name"], "dex": p["dex"], "age_days": round(ft["age_h"] / 24, 1), "liq_usd": round(p["liq_now"]),
+                     "vol24_usd": round(ft["vol24_usd"]), "h1_pct": round(ft["h1_pct"], 1), "h24_pct": round(ft["h24_pct"], 1),
+                     "failed": failed, "passes": not failed, "candle_time": iso(cs[i][0] + bt.TF)})
+    rows.sort(key=lambda r: (len(r["failed"]), -r["liq_usd"]))
+    return rows, [{"filter": k, "count": v} for k, v in rejects.items()]
+
+
 def build(outdir, live_net=True):
     outdir.mkdir(parents=True, exist_ok=True)
     now = time.time()
@@ -170,6 +281,13 @@ def build(outdir, live_net=True):
     except Exception:
         pass
 
+    sol = sol_price()
+    cm_rows, cm_parts, cm_sum, rent = cost_math(cfg, sol)
+    wl_rows, wl_rej = watchlist(db, cfg, now)
+    cr = db.execute("SELECT MIN(ts), MAX(ts), COUNT(DISTINCT pool) FROM candles").fetchone()
+    summary[0].update(sol_usd=sol, rent_usd=rent, rent_pct_of_position=round(100 * rent / cfg["position_usd"], 1) if rent else None,
+                      candles_oldest=iso(cr[0]), candles_newest=iso(cr[1]), pools_with_candles=cr[2],
+                      run_started=False, paper_days_total=7)
     summary[0]["downloader_running"] = downloader_running()
     summary[0]["now_task"], summary[0]["now_title"] = NOW["task"], NOW["title"]
     summary[0]["now_next"], summary[0]["now_needs"] = NOW["next"], NOW["needs"]
@@ -188,6 +306,13 @@ def build(outdir, live_net=True):
         "history": history_rows(outdir, now, n_done, n_candles, len(elig)),
         "paper": pdb_rows,
         "backtest": backtest,
+        "costmath": cm_rows,
+        "costsum": cm_sum,
+        "costparts": cm_parts,
+        "watch": wl_rows,
+        "rejects": wl_rej,
+        "readiness": readiness(TASKS, summary[0], cfg),
+        "glossary": [{"term": a, "meaning": b} for a, b in GLOSSARY],
     }
     for name, rows in files.items():
         (outdir / f"{name}.json").write_text(json.dumps(rows, separators=(",", ":")))
