@@ -1,5 +1,14 @@
 # JOURNAL (source of truth between sessions — update every session)
 
+## 2026-11-18 — GitHub Actions collector prepared (user chose GitHub as the host); not enabled
+- Checked: repository is PRIVATE (personal account), default branch `main` holds only the first skeleton, no workflows exist, PR #1 (draft) is open from the dev branch.
+  Two consequences: schedules and dispatches run only from `main`, so the workflow must be merged there; and a continuous collector (about 43,000 minutes per month) would exhaust a private repository's allowance.
+- Built: `.github/workflows/collector.yml` (5.5 h runs that chain themselves, cron safety net, serialised, STOP switch, cost guard that refuses to run on a private repo unless the variable
+  ALLOW_PRIVATE_MINUTES=yes, tests and a reachability check first, restore/persist around the collection, failure-loop guard) and `bot/ci_persist.py` (rolling `data` branch, one force-pushed commit),
+  `bot/ci_smoke.py`. 6 new tests against temporary bare git repositories (round trip, single commit, restore-then-continue, STOP file, corrupted snapshot refused); actionlint reports no problems.
+- Not verified (cannot be from here): behaviour on a real runner, API access from GitHub's IP ranges, the `GITHUB_TOKEN` permissions in this repository's settings, and whether the push of a workflow file is allowed from this session.
+- Decisions needed from the user: public repository or accept private usage; merge PR #1 into main (or allow me to).
+
 ## 2026-11-18 — task 5 done: event-study tool; sandbox cannot collect continuously; user has no VPS yet
 - Finding about the environment: the graduation collector STOPPED when the container was suspended between turns (last record 16:26, checked 22:48; the process was gone). The sandbox therefore cannot
   produce the experiment's dataset. Added `bot/collect_backup.py` (consistent gz backup + manifest + checksummed restore) and committed `data/collected/` (80 launches, 78 probes, 27 safety reports from ~15 minutes).

@@ -90,3 +90,19 @@ Data only accumulates while a host runs the collector continuously; time with no
 
 ## Keeping the data (all hosts)
 `python3 bot/collect_backup.py backup` writes a consistent `data/collected/launches.db.gz` plus `MANIFEST.json` (row counts, time range, checksum). `restore` verifies the checksum before restoring.
+
+## GitHub Actions collector (chosen by the user on 2026-11-18, not yet enabled)
+
+`.github/workflows/collector.yml` runs `bot/launches.py` on a GitHub-hosted runner. Each run restores the database from the rolling `data` branch, collects for about 5.5 hours, saves it back
+(`bot/ci_persist.py`, one force-pushed commit so the repository does not grow), then starts the next run itself; a cron entry every 6 hours is only a safety net. Concurrency is serialised, so two collectors never run at once.
+Expected gap between runs: a few minutes per 5.5 hours. No secrets are needed: the built-in `GITHUB_TOKEN` writes the data branch and starts the next run.
+
+**Before it can work, three things must be true (they are your decisions):**
+1. **The workflow file must be on the default branch (`main`).** GitHub runs schedules and manual dispatches only from there. Today `main` holds only the first skeleton; merging pull request #1 puts everything there.
+2. **Cost.** The repository is private. A continuous collector uses about 43,000 Actions minutes per month, far above the monthly allowance of a private repository on a personal plan (check your plan; the figure for free accounts is about 2,000 minutes).
+   The workflow therefore refuses to run on a private repository unless you set the repository variable `ALLOW_PRIVATE_MINUTES` to `yes`. Two safe ways: make the repository public (standard runners are free for public repositories; the code,
+   journal and research become visible, and no keys are in the repository), or accept the usage knowingly and set a spending limit in your GitHub billing settings.
+3. **Runner IPs.** GitHub runners use shared cloud addresses that some data APIs rate-limit or block. The first step of every run is a reachability test (`bot/ci_smoke.py`) and fails fast with a clear message if GeckoTerminal, Jupiter or RugCheck cannot be reached [not yet tested on a real runner].
+
+**Controls.** Stop at any time: put a file named `STOP` on the `data` branch (the run in progress finishes, no new run is chained), or disable the workflow in the Actions tab. Start manually: Actions tab, graduation-collector, Run workflow.
+**Using the data in a Claude session or locally:** `git fetch origin data`, then `git show origin/data:data/collected/launches.db.gz > data/collected/launches.db.gz` (and `MANIFEST.json`), then `python3 bot/collect_backup.py restore`.
