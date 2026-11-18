@@ -1,5 +1,18 @@
 # JOURNAL (source of truth between sessions — update every session)
 
+## 2026-11-18 — task 1 in progress + monitoring dashboard
+- Refactor: `bot.py` now has a feature layer (`features_from_dex`, `check_features`: missing input -> "not evaluable", never a silent pass)
+  and `exit_levels` (single source of exit thresholds, used by `exit_reason` and the backtester). 12 original tests still pass.
+- `backtest.py`: point-in-time replay (decision at candle close, fill at NEXT candle open, stop-before-TP in ambiguous candles, gap-down
+  stops fill at the open), live risk limits, random-entry null model, bootstrap CI. 18 new tests (`test_backtest.py`); an early version
+  of the replay tests was vacuous (no trades fired) and was fixed after a stricter test exposed it.
+- `data.py`: universe from GeckoTerminal listings (211 pools, age 2-40 d, liq >= $5k, SOL/USDC/USDT quote), 5m candles resumable at 5 s/request.
+- DATA QUALITY FLAG: some pools report absurd liquidity (e.g. QNT/USDC $4.3B). Rule fixed BEFORE looking at any backtest result:
+  exclude pools with liq_now > $50M (blue-chips / bad data) from the memecoin universe. 56 of 211 fall under this rule.
+- Not done yet for task 1: finish download, run `backtest.py --days 14`, write results and the bias statement here, commit.
+- Dashboard: `bot/export_status.py` writes JSON snapshots (summary, tasks, pools, paper trades) consumed by a Claude artifact
+  "Solana Paper Bot Monitor". It is a snapshot refreshed on republish, not a live stream from the sandbox.
+
 ## 2026-11-18 — task 0: network check (Claude Code web session)
 - Initial state: every API host was refused by the environment's network policy (proxy 403 on CONNECT); only docs sites
   were allowlisted. Kamil approved adding to environment "Claude-Coding": `api.dexscreener.com`, `api.geckoterminal.com`,
