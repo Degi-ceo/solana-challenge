@@ -26,6 +26,15 @@ import bot
 TF = 300            # candle length, seconds
 EXIT_MODE = "wick"  # "wick": exits can trip on a candle's low/high (pessimistic). "close": exits evaluated only at candle closes
                     # with bot.exit_reason (what a 5-minute poller would see; optimistic about wicks). Applied to signal AND null model.
+LAUNCHPAD_DEXES = {"pumpswap", "pump-fun", "meteora-dbc", "moonshot", "raydium-launchlab", "heaven", "boop-fun", "bags-fm"}
+
+
+def is_launchpad(meta):
+    """PROXY for 'memecoin': the pool is on a memecoin-launchpad DEX or the mint is a pump.fun vanity address (ends in 'pump').
+    Imperfect, but it removes the tokenised stocks, wrapped large coins and DeFi tokens that GeckoTerminal listings also return."""
+    return meta["dex"] in LAUNCHPAD_DEXES or (meta["base_mint"] or "").endswith("pump")
+
+
 HIST_SKIP = ("liq", "vol/liq", "flow")   # no historical input available from OHLCV
 
 
@@ -305,26 +314,36 @@ def suite(db, days, cfg, json_path=None):
     saved = EXIT_MODE
     pools, start, end = load(db, days, max_liq_now=cfg.get("universe", {}).get("max_liq_now_usd"))
     res = [_variant(pools, start, end, cfg, g, m) for m, g in (("wick", "none"), ("wick", "now"), ("close", "none"), ("close", "now"))]
+    meme = {k: v for k, v in pools.items() if is_launchpad(v["meta"])}
+    mres = [_variant(meme, start, end, cfg, "none", m) for m in ("wick", "close")]
     EXIT_MODE = saved
     print(f"{'exits':<6} {'liq gate':<9} {'trades':>6} {'net $':>8} {'PF':>5} {'win%':>5} {'maxDD':>6} | {'signal mean/trade [95% CI]':<34} {'null median':>11} {'beats null':>10}")
     for r in res:
         p, ci = r["port"], r["ci"]
         print(f"{r['mode']:<6} {r['gate']:<9} {p['n']:>6} {p['net']:>+8.2f} {p['pf']:>5.2f} {p['win']:>5.0f} {p['max_dd']:>6.2f} | "
               f"{r['sig']['mean']:>+7.4f} [{ci[0]:+.4f},{ci[1]:+.4f}] n={r['sig']['n']:<4} {r['null_median']:>+11.4f} {r['beat_pct']:>9.0f}%")
+    print(f"MEMECOIN PROXY ONLY ({len(meme)} of {len(pools)} pools are launchpad-style):")
+    for r in mres:
+        pp, ci = r["port"], r["ci"]
+        print(f"{r['mode']:<6} {r['gate']:<9} {pp['n']:>6} {pp['net']:>+8.2f} {pp['pf']:>5.2f} {pp['win']:>5.0f} {pp['max_dd']:>6.2f} | "
+              f"{r['sig']['mean']:>+7.4f} [{ci[0]:+.4f},{ci[1]:+.4f}] n={r['sig']['n']:<4} {r['null_median']:>+11.4f} {r['beat_pct']:>9.0f}%")
     print("Share of stop/trail exits that were wick-only (close recovered above the level):", f"{res[0]['wick_share']:.0f}%")
     if json_path:
         import json
         h, c = res[0], res[2]
         d = lambda r: f"{r['port']['n']} trades, net {r['port']['net']:+.2f} USD, PF {r['port']['pf']:.2f}, win {r['port']['win']:.0f}%, max drawdown {r['port']['max_dd']:.2f} USD"
+        m0, m1 = mres
         rows = [
-            {"label": "Headline (pessimistic wick exits, no liquidity gate)", "value": f"{h['port']['net']:+.2f} USD", "note": d(h) + f" over {days:g} days on a $5 bankroll."},
-            {"label": "Signal trades vs random entries", "value": f"{h['sig']['mean']:+.3f} vs {h['null_median']:+.3f} USD/trade",
-             "note": f"Signal mean {h['sig']['mean']:+.4f} USD per trade (95% CI {h['ci'][0]:+.4f} to {h['ci'][1]:+.4f}, n={h['sig']['n']}). Random entries with the same exits and costs: median {h['null_median']:+.4f}. The signal beat {h['beat_pct']:.0f}% of random runs."},
-            {"label": "Optimistic bracket (exits judged at 5-minute closes only)", "value": f"{c['port']['net']:+.2f} USD", "note": d(c) + f"; signal beat {c['beat_pct']:.0f}% of random runs."},
-            {"label": "With today's liquidity as a gate (look-ahead)", "value": f"{res[1]['port']['net']:+.2f} USD", "note": d(res[1])},
-            {"label": "Exit mix (headline)", "value": ", ".join(f"{k} {v}" for k, v in sorted(h["exits"].items())), "note": f"{h['wick_share']:.0f}% of stop and trailing exits were triggered by a wick whose candle closed back above the level."},
-            {"label": "Reading of this test", "value": "No edge found with the starting thresholds", "note": "Both exit brackets lose money after costs and the signal does not beat random entries. The thresholds were set before this data was seen, so nothing was tuned to it. This is not the calibrated verdict (task 3). The known biases (survivorship, today's liquidity, untested flow filter) favour the strategy, so a worse live result is more likely than a better one."},
-            {"label": "Not tested here", "value": "liquidity, volume/liquidity, buy pressure", "note": "No historical data for these, so the backtest runs without them."},
+            {"key": "caveat", "label": "Universe caveat", "value": f"only {len(meme)} of {len(pools)} pools are memecoin launches",
+             "note": "The first test ran on every GeckoTerminal pool in range. Most are tokenised stocks (NVDA, QQQ), wrapped large coins (CRO, OSMO, LUNC, IOTA) and DeFi tokens (JUP, RAY). The memecoin test keeps only pools on memecoin launchpads or with a pump.fun address. The proxy is imperfect."},
+            {"key": "meme", "label": "Memecoin-only test (launchpad-style pools)", "value": f"{m0['port']['net']:+.2f} to {m1['port']['net']:+.2f} USD",
+             "note": f"Pessimistic and optimistic exits. Signal mean {m0['sig']['mean']:+.3f} USD per trade, 95% CI {m0['ci'][0]:+.3f} to {m0['ci'][1]:+.3f}, but only {m0['sig']['n']} signal trades from about {len(meme)} pools in one 14-day market. Thin evidence: it points the same way, it does not settle it."},
+            {"key": "all", "label": "All pools in range (not a clean memecoin test)", "value": f"{res[0]['port']['net']:+.2f} USD", "note": d(res[0]) + f". Signal mean {res[0]['sig']['mean']:+.3f} vs random {res[0]['null_median']:+.3f} USD per trade; beat {res[0]['beat_pct']:.0f}% of random runs."},
+            {"key": "close", "label": "All pools, optimistic bracket (exits at 5-minute closes only)", "value": f"{res[2]['port']['net']:+.2f} USD", "note": d(res[2]) + f"; signal beat {res[2]['beat_pct']:.0f}% of random runs."},
+            {"key": "exits", "label": "Exit mix (all pools)", "value": ", ".join(f"{k} {v}" for k, v in sorted(res[0]["exits"].items())), "note": f"{res[0]['wick_share']:.0f}% of stop and trailing exits were triggered by a wick whose candle closed back above the level, so the exit assumption moves the result."},
+            {"key": "reading", "label": "Reading", "value": "Not a valid memecoin verdict yet",
+             "note": "The direction is negative everywhere, but the universe was contaminated, the memecoin sample is small, and real memecoin costs and the sell side are not modelled. Nothing here is tuned. The calibrated test (task 3) must start from a proper memecoin universe."},
+            {"key": "skipped", "label": "Not tested here", "value": "liquidity, volume/liquidity, buy pressure", "note": "No historical data for these, so the backtest runs without them."},
         ]
         Path(json_path).parent.mkdir(parents=True, exist_ok=True)
         Path(json_path).write_text(json.dumps(rows))

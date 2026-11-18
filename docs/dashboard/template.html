@@ -150,7 +150,7 @@
   .rows.stackv > li { grid-template-columns: minmax(0, 1fr); gap: 2px; }
   .rows.stackv .val { grid-column: 1; grid-row: auto; text-align: left; white-space: normal; font-size: 17px; }
   .rows.stackv .ds { font-size: 14px; }
-  .finding { border-color: var(--bad); }
+  .finding { border-color: var(--warn); }
   .finding .head h2 { font-size: 20px; }
   .gates > li { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; gap: 2px 10px; padding: 10px 0; border-top: 1px solid var(--line); align-items: start; }
   .gates > li:first-child { border-top: 0; padding-top: 0; }
@@ -583,7 +583,7 @@
   wsel.onchange = function () { wstate.show = wsel.value; wstate.n = 12; wdraw(); }; wdraw();
 
   /* ---------- strategy: backtest ---------- */
-  var bt = $('backtest'); head(bt, 'Backtest', D.backtest.length ? 'Latest result' : 'Not run yet', D.backtest.length ? '' : 'It starts automatically once the price history finishes downloading (' + etaTxt + ').');
+  var bt = $('backtest'); head(bt, 'Backtest', D.backtest.length ? 'First result, with caveats' : 'Not run yet', D.backtest.length ? '' : 'It starts automatically once the price history finishes downloading (' + etaTxt + ').');
   if (!D.backtest.length) {
     add(bt, add(el('div', 'empty'), document.createTextNode('When it runs, this panel shows the items below. A negative or inconclusive result gets the same space as a good one.')));
     var wl2 = el('ul', 'rows');
@@ -597,9 +597,13 @@
 
   /* ---------- overview: latest finding ---------- */
   if (D.backtest.length) {
+    var byKey = {}; D.backtest.forEach(function (r) { if (r.key) byKey[r.key] = r; });
     var fd = $('finding'); fd.hidden = false;
-    head(fd, 'Latest finding \u00b7 backtest', 'The starting strategy loses money on 14 days of history', 'Net ' + D.backtest[0].value + ' on a $5 bankroll over 14 days, with pessimistic exits' + '. Entering at random would have lost less.');
-    var fl = el('ul', 'rows stackv'); [D.backtest[1], D.backtest[2]].forEach(function (r) { add(fl, add(el('li'), el('span', 'nm', r.label), el('span', 'val', r.value), el('span', 'ds', r.note))); }); add(fd, fl);
+    head(fd, 'Latest finding \u00b7 first backtest', 'Negative, but not yet a clean test of memecoins',
+      'The direction is negative in every variant, yet most pools tested were not memecoins and the memecoin sample is small. Treat it as a warning, not a verdict.');
+    var fl = el('ul', 'rows stackv');
+    ['caveat', 'meme', 'all'].forEach(function (k) { var r = byKey[k]; if (r) add(fl, add(el('li'), el('span', 'nm', r.label), el('span', 'val', r.value), el('span', 'ds', r.note))); });
+    add(fd, fl);
     var go = el('button', 'btn', 'See the full evidence'); go.type = 'button'; go.onclick = function () { show('strategy', true); }; add(fd, go);
   }
 

@@ -22,9 +22,9 @@ MAX_LIQ = 50_000_000
 # Task board. Update `status` as work proceeds (done | active | todo). Facts, not hopes.
 TASKS = [
     (0, "Network check", "done", "Setup", "Every data host reachable; Jupiter via lite-api / api.jup.ag"),
-    (1, "Historical data + backtester", "done", "Evidence", "Backtest run: no edge found with the starting thresholds (see Strategy tab)"),
+    (1, "Historical data + backtester", "active", "Evidence", "First backtest negative but on a contaminated universe; to be redone on memecoins only"),
     (2, "Candidate discovery", "done", "Evidence", "Seven tagged sources, per-source funnel, forward collector; 4.3x more candidates"),
-    (3, "Calibration (walk-forward)", "active", "Evidence", "Pre-registered split, trials counted, out-of-sample verdict only"),
+    (3, "Calibration (walk-forward)", "todo", "Evidence", "Pre-registered split, trials counted, out-of-sample verdict only"),
     (4, "Realistic execution costs", "todo", "Realism", "Latency, quote-based slippage, rent, failed fills"),
     (5, "Rug / safety checks", "todo", "Realism", "Token-2022, LP lock, RugCheck, sell simulation"),
     (6, "Live executor (disabled)", "todo", "Execution", "Mocked tests; nothing is sent unless live=true"),
@@ -70,10 +70,10 @@ RULES = [
 
 # What the bot/Claude is doing and what the reader must do. Update when the step changes (facts only).
 NOW = {
-    "task": 3,
-    "title": "Task 3: calibrating thresholds without overfitting",
-    "next": "Pre-register the train/test split and verdict rule, then test entry rules against the random baseline.",
-    "needs": [],   # list of strings; empty means nothing is needed from Kamil
+    "task": 1,
+    "title": "Paused: checking how Solana memecoins work before building more",
+    "next": "Fix the memecoin universe, re-run the backtest on memecoins only, and measure real trading costs. Nothing new is built until you agree.",
+    "needs": ["Read the findings in the chat reply and tell me whether to go ahead with the corrected plan."],   # list of strings; empty means nothing is needed from Kamil
 }
 
 

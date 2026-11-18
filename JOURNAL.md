@@ -1,5 +1,19 @@
 # JOURNAL (source of truth between sessions — update every session)
 
+## 2026-11-18 — CORRECTION to task 1 + research pause (user asked to understand the market before building more)
+- Retraction: the "no edge found" reading of the first backtest overstated what was tested. Its universe (every GeckoTerminal pool in range, liq <= $50M) was mostly NOT
+  memecoins: 63 of 156 pools are launchpad-style, and only 6 of the 32 pools inside the strategy window. The rest are tokenised stocks, wrapped large coins and DeFi tokens.
+  The dashboard wording was corrected ("negative, but not yet a clean test of memecoins"). Task 1 is re-opened: the engine and look-ahead tests stand, the universe does not.
+- Memecoin-only re-test (proxy: launchpad DEX or pump.fun mint): net -3.52 (wick exits) / -0.84 (close-only), signal -0.079 vs random -0.040 per trade, but n = 98 signals
+  from ~20 pools in one 14-day market. Direction unchanged, evidence thin. `backtest.py --suite` now prints it and writes keyed rows for the dashboard.
+- Research written to `docs/HOW_IT_WORKS.md` (bonding curve -> graduation to PumpSwap ~85 SOL, <2% of launches graduate, LP burned, rugs are liquidity/social,
+  snipers/bundlers, sandwiching at >=1-2% slippage, Jito tips of 0.0001-0.005 SOL = 0.7-7% of a $1 swap per side). Items not yet verified are marked [open].
+- Findings that change the plan: pool age = time since graduation, not token launch; the $50k liquidity floor is ~4x a fresh graduate's liquidity, so it only selects survivors;
+  the flat $0.01 network fee is the LOW end of realistic costs at $1 per trade; Token-2022/honeypot mechanics still need checking against Solana docs.
+- Process lesson: I built a dashboard and a discovery pipeline before validating that the test universe represented the thing being tested. Task 3 is paused.
+- Proposed next steps (awaiting the user's go-ahead): (1) define the memecoin universe explicitly and verify it on live pools, (2) re-run the backtest on memecoins only and
+  report sample size honestly, (3) measure real costs (recent priority fees via RPC, Jupiter quotes at $1 / $5), (4) only then pre-register calibration.
+
 ## 2026-11-18 — task 2 done: discovery broadened, per-source funnel, forward collector
 - New `bot/discovery.py`: seven tagged sources: DexScreener boosts top / latest and profiles (PAID promotion), DexScreener search (12 meme keywords),
   GeckoTerminal trending (1h/6h/24h), new pools and top-volume. De-duplicated by mint, all tags kept (`ds_search+gt_trending`). GeckoTerminal calls are
