@@ -55,3 +55,6 @@ Written 2026-11-18 after the user asked to understand the market before building
 - https://docs.solanatracker.io/guides/sniper-detection
 - https://www.helius.dev/blog/solana-mev-report
 - https://www.quicknode.com/guides/solana-development/defi/mev-on-solana
+
+> Update 2026-11-18: this note is superseded in parts by `docs/RESEARCH_MEMECOIN_SYSTEM.md` (primary papers read, live measurements, target design). In particular the network-fee
+> range here was too high for plain priority fees (measured about $0.0015 per swap) but still applies when a Jito tip is paid.

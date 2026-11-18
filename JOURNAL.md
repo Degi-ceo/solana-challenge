@@ -1,5 +1,19 @@
 # JOURNAL (source of truth between sessions — update every session)
 
+## 2026-11-18 — deep research: how the system should work for Solana memecoins (docs/RESEARCH_MEMECOIN_SYSTEM.md)
+- Read four papers from arxiv.org (host allowed by the user): Marino et al. (655,770 tokens created in Sept 2025, 4,338 = 0.63% graduated, threshold about $69k market cap),
+  Li et al. (6.4M tokens over 7 months; XGBoost on first 5 minutes, MCC about 0.36-0.39, authors say not deployable), MELT (41k+ launches; 36.5% of supply held by coordinated accounts;
+  top-10 share +24 pt for high-risk vs +6; about 73% drop below 40% of migration price), early-buyer groups (a follower lost money out of sample in all 32 configurations).
+  A fifth paper (2607.02795) has its numbers withdrawn by the authors and is not used. The first agent fetches failed with DNS errors before the network change propagated; the curl reads worked.
+- Live measurements (quotes only, nothing sent): Jupiter round trip 0.27-5.2% at $1-$5 depending on pool; price impact about 0; priority fee for popular pools about $0.0015 per swap (max 3.0M
+  microlamports/CU); fresh PumpSwap graduates hold about $10-33k liquidity; RugCheck summary score was uninformative (6/6 score 1) but the full report has insiders, creator, LP, authorities;
+  the newest 200 pools on GeckoTerminal cover only 2.4 minutes (86% pre-graduation), so the graduation stream needs polling every 2 minutes.
+- Own-data event study (22 launchpad-style pools, survivors only): buy 1h after pool creation: median +11% (6h) / +18% (24h), mean +177% / +225%; buy at 24h: median -8% (24h), -17% (72h);
+  median time of highest close 15h, 64% within 24h. Fat right tail, negative typical outcome later.
+- Conclusion: a memecoin is a launch event; outcome is driven by insiders and costs; the powerful design is a forward event study on ALL graduates (about 25 per hour), observing at fixed ages with
+  measured sell-side costs, and trading only rules that beat random entry out of sample. Round-trip cost at $1 is 0.8-35% depending on pool/tips/rent, so position size matters.
+- Nothing new was built. Proposed re-plan is in section 6 of the research doc. Awaiting the user's go-ahead.
+
 ## 2026-11-18 — CORRECTION to task 1 + research pause (user asked to understand the market before building more)
 - Retraction: the "no edge found" reading of the first backtest overstated what was tested. Its universe (every GeckoTerminal pool in range, liq <= $50M) was mostly NOT
   memecoins: 63 of 156 pools are launchpad-style, and only 6 of the 32 pools inside the strategy window. The rest are tokenised stocks, wrapped large coins and DeFi tokens.
