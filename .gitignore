@@ -1,0 +1,9 @@
+*.db
+*.log
+KILL
+__pycache__/
+*.pyc
+*.json.key
+keypair*.json
+*.pem
+.env

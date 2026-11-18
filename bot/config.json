@@ -1,0 +1,48 @@
+{
+  "db": "paper.db",
+  "rpc_url": "https://api.mainnet-beta.solana.com",
+  "scan_interval_s": 60,
+  "bankroll_usd": 5.0,
+  "position_usd": 1.0,
+  "max_open": 3,
+  "quote_whitelist": ["SOL", "WSOL", "USDC", "USDT"],
+  "filters": {
+    "min_age_h": 48,
+    "max_age_h": 336,
+    "min_liq_usd": 50000,
+    "min_vol24_usd": 50000,
+    "vol_liq_min": 0.3,
+    "vol_liq_max": 10,
+    "h1_change_min": 2,
+    "h1_change_max": 15,
+    "h24_change_min": -20,
+    "h24_change_max": 150,
+    "min_h1_txns": 40,
+    "min_h1_buy_ratio": 0.52,
+    "max_top_ex_largest_pct": 35
+  },
+  "exit": {
+    "stop_loss_pct": 15,
+    "take_profit_pct": 40,
+    "trail_activate_pct": 20,
+    "trail_pct": 12,
+    "max_hold_h": 24,
+    "liq_drop_exit_frac": 0.5,
+    "no_data_min": 30
+  },
+  "costs": {
+    "fee_pct": 0.25,
+    "slippage_pct": 0.5,
+    "network_fee_usd": 0.01
+  },
+  "risk": {
+    "daily_loss_limit_usd": 1.5,
+    "reentry_block_h": 24,
+    "onchain_cache_h": 6
+  },
+  "go_nogo": {
+    "min_closed_trades": 15,
+    "min_profit_factor": 1.2,
+    "min_net_pnl_usd": 0.0
+  }
+}
