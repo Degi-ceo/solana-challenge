@@ -1,5 +1,17 @@
 # JOURNAL (source of truth between sessions — update every session)
 
+## 2026-11-18 — task 5 done: event-study tool; sandbox cannot collect continuously; user has no VPS yet
+- Finding about the environment: the graduation collector STOPPED when the container was suspended between turns (last record 16:26, checked 22:48; the process was gone). The sandbox therefore cannot
+  produce the experiment's dataset. Added `bot/collect_backup.py` (consistent gz backup + manifest + checksummed restore) and committed `data/collected/` (80 launches, 78 probes, 27 safety reports from ~15 minutes).
+  Hosting options without a VPS are in docs/DEPLOY.md; the user chooses.
+- `bot/eventstudy.py` implements docs/PREREGISTRATION.md exactly (amendments A1-A4 written first): first pool per mint, memecoin classes only, net return = price change - measured round trip - $0.02 network fee,
+  -100% when unsellable at exit, entry only when buy and sell routes exist, safety reports count only if taken before the entry snapshot (no look-ahead), median and 10% trimmed mean, one-sided bootstrap,
+  Holm correction over H1-H5, minimum sample rules, weekly rule (go needs two passing weeks). H6 needs candle data and is not implemented yet.
+- Tests (18, 98 total): costs, unsellable and incomplete handling, probe lag, gates, dedupe, a planted effect is detected, below-minimum samples are inconclusive (never "no effect"), 12 pure-noise
+  datasets produce at most one false pass, go needs two separate weeks. Mutation check: four deliberately broken versions (look-ahead, minimum 10, flipped test sign, ignored exit probe) are each caught.
+- On the real data so far: 16 graduates in the population, none with both entry and exit snapshots -> every test inconclusive, as it must be.
+- Next without needing the collector: task 6 (paper execution with quote-based fills and the safety gates as code, fixture tests) and task 7 (executor on api.jup.ag, mocked, disabled). Real evidence waits for a host.
+
 ## 2026-11-18 — task 4 done: graduation collector, first live results (bot/launches.py)
 - Built and tested (80 tests passing, 22 new in test_launches.py): GeckoTerminal new_pools polled every ~2 minutes (10 pages), curve pools ignored, tiny (< $3k) and late pools stored with a
   status, observed pools classified and snapshotted at fixed ages from GeckoTerminal's multi-pool endpoint (price, liquidity, volume, buys/sells, unique traders), Jupiter buy+sell cost probes

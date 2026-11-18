@@ -57,4 +57,14 @@ Detection delay (up to 5 min), GeckoTerminal price quality for thin pools, wash-
   (the first live run showed the same token appearing in several pools, which would inflate the sample and correlate observations). Sample progress on the dashboard counts distinct mints.
   Note recorded for interpretation, not a rule change: several Meteora DAMM v2 pools showed 99.7-99.99% round-trip cost at 5 minutes. A plausible cause is a high launch fee that decays over time (anti-sniper
   fee scheduler) [open, unverified]; the pre-registered return definition already charges the measured cost at the entry age, so such pools are priced correctly rather than assumed un-sellable.
+- **2026-11-18 (A4), before any return was computed:** implementation details that the first draft left open, fixed now:
+  (a) **Entry cost** = the round-trip price cost measured by the $2.50 probe at the latest probe age at or before the entry age (probe ages are 5, 15, 60, 360 min), using only a probe taken at most 120 s after the
+  entry snapshot. For the 24 h entry (H1) this is the 6 h probe. Pools where the entry probe shows no buy route or no sell route are **not enterable**: excluded from returns and reported as a count.
+  (b) **Unsellable at exit** = the exit snapshot records the pool as gone, or exit liquidity is below $500, or a probe at the exit age shows no sell route. A launch whose exit snapshot was never taken
+  (collector down) is **incomplete** and excluded, reported as a count; it is never imputed.
+  (c) **Safety gates (H2)** = no insiders flagged by RugCheck AND top-10 holders excluding the pool's own accounts at most 40% AND mint and freeze authority revoked AND no active transfer-fee, transfer-hook or
+  permanent-delegate extension AND entry round trip at most 3%. A safety report counts only if it was taken **before the entry snapshot**; otherwise the launch is "gate unknown" and excluded from gated sets (no look-ahead).
+  (d) **H5 condition:** at the 6 h snapshot the price is 30-50% of the highest valid snapshot price at ages up to 6 h (a fall of 50-70% from the early peak).
+  (e) **Minimum sample per primary cell:** H1 n >= 300; H2 and H5 the tested subset n >= 300 and the baseline n >= 300; H3 and H4 total n >= 300 with each group >= 100.
+  (f) **Weekly rule:** a calendar week (by pool creation time, UTC, Monday start) counts if its own sample meets the minimum for that cell; "go" needs two such weeks that each pass after Holm correction.
 

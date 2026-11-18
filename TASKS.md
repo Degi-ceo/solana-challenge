@@ -2,15 +2,15 @@
 
 Done earlier: 0 network check; 1 backtester engine (universe was contaminated, kept only for price-path questions); 2 tagged discovery + collector.
 
-## 3. Memecoin classifier and universe  (replaces "calibration")
+## 3. [done] Memecoin classifier and universe
 Classify every candidate: confirmed / probable / not_memecoin / unknown, with the reason stored. Age = time since graduation AND token launch time where known.
 **Done when:** unit tests cover each class; the existing 211 pools are re-classified and the counts and examples are in the journal.
 
-## 4. Graduation stream + fixed-age snapshots  (`bot/launches.py`)
+## 4. [done] Graduation stream + fixed-age snapshots  (`bot/launches.py`)
 Poll GeckoTerminal new_pools every 2 minutes (10 pages), keep non-curve pools, de-duplicate, classify, then snapshot each at fixed ages; Jupiter cost probes; one RugCheck full report.
 Record detection delay and stream gaps. **Done when:** mocked tests pass and a live run in the sandbox records graduates with snapshots, probes and safety fields.
 
-## 5. Event-study analysis  (`bot/eventstudy.py`)
+## 5. [done] Event-study analysis  (`bot/eventstudy.py`)
 Implements `docs/PREREGISTRATION.md` exactly: returns, baseline, bootstrap, Holm, minimum sample, "inconclusive" handling. **Done when:** tests on synthetic data show it detects a planted effect,
 does not invent one in noise, and reports inconclusive below the minimum n.
 
