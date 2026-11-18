@@ -258,6 +258,58 @@ def watchlist(db, cfg, now):
     return rows, [{"filter": k, "count": v} for k, v in rejects.items()]
 
 
+PRIMARY_CELLS = [("H1", "Buying 24 h after graduation has a negative median", 1440, 2880),
+                 ("H2", "Entry at 15 min after safety gates has a positive median", 15, 360),
+                 ("H3", "High insider share raises the frequency of -50% outcomes", 15, 360),
+                 ("H4", "A cheap sell quote removes un-sellable outcomes", 15, 360),
+                 ("H5", "After a 50-70% fall from the 6 h peak a time-boxed entry is positive", 360, 1440)]
+MIN_N = 300
+
+
+def launch_data():
+    """Collector state from bot/launches.db for the dashboard (empty structures if the collector never ran)."""
+    import sqlite3
+    path = BASE / "launches.db"
+    if not path.exists():
+        return {}, [], [], []
+    db = sqlite3.connect(path)
+    db.row_factory = sqlite3.Row
+    q = lambda sql, *a: db.execute(sql, a).fetchall()
+    one = lambda sql, *a: db.execute(sql, a).fetchone()[0]
+    meta = {r["key"]: r["value"] for r in q("SELECT key, value FROM meta")}
+    st = {r[0]: r[1] for r in q("SELECT status, COUNT(*) FROM launches GROUP BY status")}
+    cls = {r[0]: r[1] for r in q("SELECT class, COUNT(*) FROM launches WHERE status='observed' GROUP BY class")}
+    first, last = one("SELECT MIN(detected_ts) FROM launches"), one("SELECT MAX(detected_ts) FROM launches")
+    delays = sorted(r[0] for r in q("SELECT detect_delay_s FROM launches WHERE status='observed'"))
+    summ = {"grad_observed": st.get("observed", 0), "grad_tiny": st.get("tiny", 0), "grad_late": st.get("late", 0),
+            "grad_curve_ignored": int(meta.get("n_curve", 0)), "grad_seen": int(meta.get("n_seen", 0)), "grad_polls": int(meta.get("polls", 0)),
+            "grad_stream_gaps": int(meta.get("stream_gaps", 0)), "grad_confirmed": cls.get("memecoin_confirmed", 0), "grad_probable": cls.get("memecoin_probable", 0),
+            "grad_not_memecoin": cls.get("not_memecoin", 0), "grad_unknown": cls.get("unknown", 0),
+            "grad_snaps": one("SELECT COUNT(*) FROM snaps WHERE missed=0"), "grad_snaps_missed": one("SELECT COUNT(*) FROM snaps WHERE missed=1"),
+            "grad_probes": one("SELECT COUNT(*) FROM probes"), "grad_safety": one("SELECT COUNT(*) FROM safety"),
+            "grad_delay_median_s": round(delays[len(delays) // 2]) if delays else None, "grad_first": iso(first) + " UTC" if first else None,
+            "grad_last": iso(last) + " UTC" if last else None, "grad_hours": round((last - first) / 3600, 2) if first and last else 0,
+            "collector_running": __import__("subprocess").run(["pgrep", "-f", "launches.py run"], capture_output=True).returncode == 0}
+    ages = [{"age_min": r[0], "label": (f"{r[0]} min" if r[0] < 120 else f"{r[0] // 60} h"), "snapshots": r[1]}
+            for r in q("SELECT age_target_min, COUNT(*) FROM snaps WHERE missed=0 GROUP BY age_target_min ORDER BY age_target_min")]
+    prereg = []
+    for hid, claim, a, b in PRIMARY_CELLS:
+        n = one("""SELECT COUNT(*) FROM launches l JOIN snaps s1 ON s1.pool=l.pool AND s1.age_target_min=? AND s1.missed=0 AND s1.price>0
+                   JOIN snaps s2 ON s2.pool=l.pool AND s2.age_target_min=? AND s2.missed IN (0,2)
+                   WHERE l.status='observed' AND l.class IN ('memecoin_confirmed','memecoin_probable')""", a, b)
+        prereg.append({"id": hid, "claim": claim, "entry_age": a, "exit_age": b, "n": n, "needed": MIN_N, "pct": round(100 * min(1, n / MIN_N))})
+    recent = []
+    for r in q("""SELECT l.pool, l.name, l.dex, l.class, l.detected_ts, l.liq_at_detect, l.detect_delay_s, l.safety_done,
+                  (SELECT COUNT(*) FROM snaps s WHERE s.pool=l.pool AND s.missed=0) snaps,
+                  (SELECT rt_pct FROM probes p WHERE p.pool=l.pool AND p.size_usd=2.5 ORDER BY age_target_min LIMIT 1) rt,
+                  (SELECT insiders_detected FROM safety x WHERE x.pool=l.pool) ins, (SELECT top10_pct_ex_lp FROM safety x WHERE x.pool=l.pool) top10
+                  FROM launches l WHERE l.status='observed' ORDER BY l.detected_ts DESC LIMIT 25"""):
+        recent.append({"name": r["name"], "dex": r["dex"], "class": r["class"], "detected": iso(r["detected_ts"]), "liq_usd": round(r["liq_at_detect"]),
+                       "delay_s": round(r["detect_delay_s"]), "snapshots": r["snaps"], "rt_pct": None if r["rt"] is None else round(r["rt"], 2),
+                       "insiders": r["ins"], "top10_pct": r["top10"]})
+    return summ, ages, prereg, recent
+
+
 def build(outdir, live_net=True):
     outdir.mkdir(parents=True, exist_ok=True)
     now = time.time()
@@ -316,6 +368,8 @@ def build(outdir, live_net=True):
     except Exception:
         pass
     summary[0].update(last_cycle)
+    ls, l_ages, l_prereg, l_recent = launch_data()
+    summary[0].update(ls)
     bt_path = BASE / "data" / "backtest_last.json"
     backtest = json.loads(bt_path.read_text()) if bt_path.exists() else []
     files = {
@@ -338,6 +392,9 @@ def build(outdir, live_net=True):
         "rejects": wl_rej,
         "readiness": readiness(TASKS, summary[0], cfg),
         "sources": src_rows,
+        "launch_ages": l_ages,
+        "prereg": l_prereg,
+        "launch_recent": l_recent,
         "glossary": [{"term": a, "meaning": b} for a, b in GLOSSARY],
     }
     for name, rows in files.items():

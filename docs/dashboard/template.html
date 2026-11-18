@@ -206,6 +206,7 @@
 
   <section class="panel" id="p-strategy" role="tabpanel" aria-labelledby="t-strategy" hidden>
     <div class="stack">
+      <div class="card" id="prereg"></div>
       <div class="card" id="backtest"></div>
       <div class="card" id="trade"></div>
       <div class="grid2 even">
@@ -226,6 +227,7 @@
         <div class="card" id="bands"></div>
         <div class="card" id="quality"></div>
       </div>
+      <div class="card" id="stream"></div>
       <div class="card" id="srcmix"></div>
       <div class="card" id="explorer"></div>
     </div>
@@ -616,6 +618,59 @@
    ['Buy pressure and trade counts', 'not testable', 'The free history has no buy/sell counts, so that filter is skipped in the backtest.'],
    ['Discovery sources', (D.sources && D.sources.length ? D.sources.length + ' tagged sources' : 'GeckoTerminal only'), 'The backtest universe is GeckoTerminal listings. The collector uses every source, so the forward data is not limited to them.']
   ].forEach(function (r) { add(ql, add(el('li'), el('span', 'nm', r[0]), el('span', 'val', r[1]), el('span', 'ds', r[2]))); }); add(qd, ql);
+
+  /* ---------- data: graduation stream ---------- */
+  var gs0 = $('stream'), obs = S.grad_observed;
+  if (obs === undefined) {
+    head(gs0, 'Graduation stream', 'Not started', 'The collector that watches every new pool after graduation has not run yet.');
+    add(gs0, el('div', 'empty', 'Start it with: python3 bot/launches.py run'));
+  } else {
+    head(gs0, 'Graduation stream', fInt.format(obs) + ' graduates observed so far',
+      'Every new pool that is not a bonding curve is recorded with its detection delay, classified, then snapshotted at fixed ages. Nothing is back-filled. ' + (S.collector_running ? 'Collector running.' : 'Collector not running in this snapshot.'));
+    var kv2 = el('div', 'kv');
+    [['Pools seen', fInt.format(S.grad_seen), fInt.format(S.grad_curve_ignored) + ' were bonding curves (ignored)'],
+     ['Too small', fInt.format(S.grad_tiny), 'under $3,000 liquidity'], ['Detected late', fInt.format(S.grad_late), 'over 5 minutes after creation'],
+     ['Median detection delay', S.grad_delay_median_s == null ? '\u2014' : S.grad_delay_median_s + ' s', 'how long the data source takes to list a new pool'],
+     ['Stream gaps', fInt.format(S.grad_stream_gaps), 'polls with no overlap, pools may be missed'], ['Snapshots', fInt.format(S.grad_snaps), fInt.format(S.grad_snaps_missed) + ' missed (not back-filled)'],
+     ['Cost probes', fInt.format(S.grad_probes), 'Jupiter quotes, nothing sent'], ['Safety reports', fInt.format(S.grad_safety), 'RugCheck full reports']
+    ].forEach(function (k) { add(kv2, add(el('div'), el('span', 'k', k[0]), el('span', 'v', k[1]), el('span', 'n', k[2]))); });
+    add(gs0, kv2);
+    add(gs0, el('h3', '', 'Classification of observed graduates'));
+    var cl = [['Confirmed memecoin', S.grad_confirmed], ['Probable memecoin', S.grad_probable], ['Not a memecoin', S.grad_not_memecoin], ['Unknown', S.grad_unknown]];
+    add(gs0, bars(cl.map(function (c) { return { label: c[0], value: c[1], kind: c[0].indexOf('memecoin') > 0 && c[0].indexOf('Not') < 0 ? '' : 'mute' }; }), Math.max.apply(null, cl.map(function (c) { return c[1]; }).concat([1]))));
+    if (D.launch_ages && D.launch_ages.length) {
+      add(gs0, el('h3', '', 'Snapshots taken by pool age'));
+      add(gs0, bars(D.launch_ages.map(function (a) { return { label: a.label, value: a.snapshots }; }), Math.max.apply(null, D.launch_ages.map(function (a) { return a.snapshots; }))));
+    }
+    var rc = D.launch_recent || [];
+    if (rc.length) {
+      add(gs0, el('h3', '', 'Latest graduates'));
+      var tw3 = el('div', 'scroll'), t3 = el('table', 'cards'), h3 = el('thead'), hr3 = el('tr');
+      ['Pool', 'Class', 'Liquidity', 'Delay', 'Snapshots', 'Sell cost $2.50', 'Insiders'].forEach(function (c, i) { var th = el('th', i > 1 ? 'r' : '', c); th.scope = 'col'; add(hr3, th); });
+      add(h3, hr3); var b3 = el('tbody');
+      rc.forEach(function (r) {
+        var tr = el('tr'); function td(l, t, c) { var x = el('td', c || '', t); x.dataset.label = l; return x; }
+        add(tr, td('Pool', r.name), td('Class', r['class'].replace('memecoin_', '')), td('Liquidity', compact(r.liq_usd), 'r num'), td('Delay', r.delay_s + ' s', 'r num'),
+          td('Snapshots', String(r.snapshots), 'r num'), td('Sell cost $2.50', r.rt_pct == null ? 'not probed yet' : r.rt_pct.toFixed(2) + '%', 'r num'),
+          td('Insiders', r.insiders == null ? 'not checked yet' : (r.insiders ? r.insiders + ' flagged' : 'none flagged'), 'r')); add(b3, tr);
+      });
+      add(t3, h3, b3); add(tw3, t3); add(gs0, tw3);
+    }
+  }
+
+  /* ---------- strategy: pre-registered tests progress ---------- */
+  var pr = $('prereg'), PR = D.prereg || [];
+  head(pr, 'Pre-registered tests', PR.length ? 'Sample collected for each test' : 'Collector not started',
+    'Each test needs at least ' + (PR.length ? PR[0].needed : 300) + ' graduates with both snapshots before it can say anything. Below that the result is "inconclusive", never "no effect". Rules are fixed in docs/PREREGISTRATION.md.');
+  if (PR.length) {
+    var pl2 = el('ul', 'rows stackv');
+    PR.forEach(function (t) {
+      var li = el('li'); add(li, el('span', 'nm', t.id + ' \u00b7 ' + t.claim), el('span', 'val', t.n + ' of ' + t.needed + ' graduates'),
+        add(el('div', 'ds'), meter(t.pct, t.id + ' sample'), el('span', '', 'Entry at pool age ' + (t.entry_age < 120 ? t.entry_age + ' min' : t.entry_age / 60 + ' h') + ', exit at ' + (t.exit_age < 120 ? t.exit_age + ' min' : t.exit_age / 60 + ' h'))));
+      add(pl2, li);
+    });
+    add(pr, pl2);
+  }
 
   /* ---------- data: candidate sources ---------- */
   var sm = $('srcmix'), SR = D.sources || [];

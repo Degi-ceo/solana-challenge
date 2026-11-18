@@ -47,4 +47,6 @@ and still non-negative under the pessimistic profile for the median. Otherwise t
 Detection delay (up to 5 min), GeckoTerminal price quality for thin pools, wash-traded volume, one or two market regimes in a short window, quotes taken at snapshot time rather than executed fills.
 
 ## Amendments
-(none)
+- **2026-11-18 (A1), before any return was computed:** "exit +X h" in the hypothesis table means the **snapshot at pool age X**, not entry + X, because snapshots exist only at the fixed ages.
+  Cells therefore are: H1 entry 24 h, exit at age 48 h; H2, H3, H4 entry 15 min, exit at age 6 h; H5 entry 6 h, exit at age 24 h. Only the label changes; no threshold, test or decision rule changes.
+  At the time of this amendment the collector had been running for minutes and no analysis had been run.
