@@ -186,6 +186,27 @@ class TestPlantedEffectAndNoise(unittest.TestCase):
         self.assertTrue(r2["go"]["H2"])
 
 
+class TestRobustness(unittest.TestCase):
+    def test_price_source_agreement_is_reported_and_does_not_change_primary_tests(self):
+        db = new_db()
+        synth(db, 400, 400)
+        base = E.evaluate(db, B=300)
+        for pool in range(0, 800, 2):                                  # half the launches get a disagreeing second price at entry and exit
+            db.execute("UPDATE snaps SET price_ds = price * 3 WHERE pool=?", (f"pool{pool}",))
+        db.commit()
+        after = E.evaluate(db, B=300)
+        self.assertEqual(base["overall"]["H2"]["p"], after["overall"]["H2"]["p"])        # primary result untouched
+        rb = after["robustness"]["H2"]
+        self.assertEqual(rb["n_with_both_sources"], 400)
+        self.assertEqual(rb["n_agreeing"], 0)
+        self.assertAlmostEqual(after["robustness"]["snapshots"]["share_disagreeing_over_10pct"], 1.0)
+
+    def test_agree_rules(self):
+        self.assertTrue(E.sources_agree({"price": 1.0, "price_ds": 1.05}))
+        self.assertFalse(E.sources_agree({"price": 1.0, "price_ds": 1.5}))
+        self.assertIsNone(E.sources_agree({"price": 1.0, "price_ds": None}))
+
+
 class TestH1AndH5(unittest.TestCase):
     def test_h1_negative_median_detected(self):
         db = new_db()

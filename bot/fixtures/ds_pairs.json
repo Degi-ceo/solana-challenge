@@ -1,0 +1,22 @@
+{
+ "schemaVersion": "1.0.0",
+ "pairs": [
+  {
+   "pairAddress": "58oQChx4yWmvKdwLLZzBi4ChoCc2fqCUWBkwMihLYQo2",
+   "priceUsd": "74.40",
+   "liquidity": {
+    "usd": 15900000.5
+   }
+  },
+  {
+   "pairAddress": "CaWw5KT1jvMfZtRYbTTcfZsuJ8qVVH5wrN57YB4CTuL9",
+   "priceUsd": "not-a-number",
+   "liquidity": {
+    "usd": 1000
+   }
+  },
+  {
+   "nope": 1
+  }
+ ]
+}

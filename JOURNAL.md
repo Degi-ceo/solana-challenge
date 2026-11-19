@@ -1,5 +1,15 @@
 # JOURNAL (source of truth between sessions — update every session)
 
+## 2026-11-19 — experiment hardening while data accrues (PR #2, awaiting merge)
+- User asked why collection takes so long if over 100,000 memecoins launch per day. Measured: about 66,000-120,000 new pools per day, but 86% sit on bonding curves and never reach a DEX; the testable
+  population (memecoin graduates after the size and class filters) is about 65 per hour (about 1,500 per day). The wait is not for tokens: it is for outcomes to mature (6 h, 24 h, 48 h exits) and for a second
+  separate week (pre-registered rule against being fooled by one market regime). Free APIs (about one request per 5 seconds) also cannot snapshot all 100,000 pools at ten ages.
+- Added: DexScreener price cross-check stored with every snapshot (amendment A5; robustness only), `eventstudy.robustness()`, `bot/report.py` -> REPORT.md (coverage, quiet periods, price agreement,
+  pre-registered tests, caveats), `.github/workflows/report.yml` (daily, publishes to a `report` branch so it never collides with the collector's force-pushed `data` branch), hourly saves in the collector.
+  7 + 3 + 5 new tests (113 total); actionlint clean. The running collector (run #1) still has the old two-hour save interval; the changes take effect from run #2 after the merge.
+- Expected time to the pre-registered minimum of 300 per cell (estimates, not measurements): H3 about half a day, H2 about 1-2 days (depends on how many launches pass all gates), H1 needs 48 h of pool age,
+  H5 needs a 50-70% fall from the early peak and may need many days or never reach 300 in a single week.
+
 ## 2026-11-18 — GitHub Actions collector prepared (user chose GitHub as the host); not enabled
 - Checked: repository is PRIVATE (personal account), default branch `main` holds only the first skeleton, no workflows exist, PR #1 (draft) is open from the dev branch.
   Two consequences: schedules and dispatches run only from `main`, so the workflow must be merged there; and a continuous collector (about 43,000 minutes per month) would exhaust a private repository's allowance.

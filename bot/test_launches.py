@@ -134,6 +134,45 @@ class TestSnapshots(unittest.TestCase):
         self.assertEqual(self.db.execute("SELECT COUNT(*) FROM snaps WHERE pool='tinyx'").fetchone()[0], 0)
 
 
+class TestCrossCheckPrice(unittest.TestCase):
+    def setUp(self):
+        self.db = new_db()
+        L.ingest(self.db, L.parse_pools(listing(gt_row(POOL_A, "pumpswap", 12_000, NOW))), NOW + 30)
+
+    def test_parse_ds_pairs_skips_bad_rows(self):
+        d = L.parse_ds_pairs(fx("ds_pairs.json"))
+        self.assertEqual(set(d), {POOL_A})
+        self.assertAlmostEqual(d[POOL_A]["price"], 74.40)
+
+    def test_second_price_is_stored_next_to_the_primary_one(self):
+        http = lambda url, body=None, retries=2, timeout=15: fx("ds_pairs.json")
+        L.take_snapshots(self.db, NOW + 90, lambda p: fx("gt_multi.json"), http_json=http)
+        r = self.db.execute("SELECT price, price_ds, liq_ds FROM snaps WHERE age_target_min=1").fetchone()
+        self.assertGreater(r["price"], 0)
+        self.assertAlmostEqual(r["price_ds"], 74.40)
+
+    def test_cross_check_failure_never_breaks_the_primary_snapshot(self):
+        def boom(url, body=None, retries=2, timeout=15):
+            raise RuntimeError("dexscreener down")
+        n = L.take_snapshots(self.db, NOW + 90, lambda p: fx("gt_multi.json"), http_json=boom)
+        self.assertEqual(n, 1)
+        r = self.db.execute("SELECT price, price_ds FROM snaps WHERE age_target_min=1").fetchone()
+        self.assertGreater(r["price"], 0)
+        self.assertIsNone(r["price_ds"])
+
+    def test_old_databases_are_migrated(self):
+        import sqlite3
+        c = sqlite3.connect(":memory:")
+        c.executescript("CREATE TABLE snaps(pool TEXT, age_target_min INT, ts REAL, age_min REAL, price REAL, liq REAL, mcap REAL, fdv REAL, vol_m5 REAL, vol_h1 REAL, vol_h24 REAL, buys_m5 INT, sells_m5 INT, buys_h1 INT, sells_h1 INT, traders_h1 INT, chg_m5 REAL, chg_h1 REAL, missed INT DEFAULT 0, PRIMARY KEY(pool, age_target_min));")
+        import tempfile, os
+        path = os.path.join(tempfile.mkdtemp(), "old.db")
+        old = sqlite3.connect(path)
+        old.executescript("CREATE TABLE snaps(pool TEXT, age_target_min INT, ts REAL, age_min REAL, price REAL, liq REAL, mcap REAL, fdv REAL, vol_m5 REAL, vol_h1 REAL, vol_h24 REAL, buys_m5 INT, sells_m5 INT, buys_h1 INT, sells_h1 INT, traders_h1 INT, chg_m5 REAL, chg_h1 REAL, missed INT DEFAULT 0, PRIMARY KEY(pool, age_target_min));")
+        old.close()
+        cols = {r[1] for r in L.connect(path).execute("PRAGMA table_info(snaps)")}
+        self.assertTrue({"price_ds", "liq_ds"} <= cols)
+
+
 class TestProbes(unittest.TestCase):
     def quotes(self, buy_out, sell_out):
         def http(url, body=None, retries=2, timeout=15):

@@ -87,13 +87,26 @@ def gates(rec, a):
             and not (ext & BAD_EXT) and rt is not None and rt <= SELL_GATE_PCT}
 
 
+PRICE_TOL = 0.10
+
+
+def sources_agree(snap, tol=PRICE_TOL):
+    """True/False when both price sources exist for the snapshot, None when the cross-check price is missing."""
+    p, q = snap.get("price"), snap.get("price_ds")
+    if not p or not q or p <= 0 or q <= 0:
+        return None
+    return abs(p / q - 1) <= tol
+
+
 def collect(pop, a, b):
     rows, counts = [], {"ok": 0, "not_enterable": 0, "no_probe": 0, "no_entry": 0, "incomplete": 0}
     for rec in pop:
         st, v, info = outcome(rec, a, b)
         counts[st] += 1
         if st == "ok":
-            rows.append({"rec": rec, "ret": v, "unsellable": info["unsellable"], "gate": gates(rec, a), "week": iso_week(rec["created_ts"])})
+            ea, xa = sources_agree(rec["snaps"][a]), sources_agree(rec["snaps"][b])
+            rows.append({"rec": rec, "ret": v, "unsellable": info["unsellable"], "gate": gates(rec, a), "week": iso_week(rec["created_ts"]),
+                         "agree": None if (ea is None or xa is None) else (ea and xa)})
     return rows, counts
 
 
@@ -212,6 +225,23 @@ def run_tests(pop, B=10_000, seed=1):
     return res
 
 
+def robustness(pop):
+    """Descriptive checks that never change a primary test: do the two price sources agree, and does the unconditional median survive restricting to agreeing launches?"""
+    out = {}
+    for h in ("H1", "H2", "H5"):
+        rows, _ = collect(pop, *CELLS[h])
+        both = [r for r in rows if r["agree"] is not None]
+        agree = [r["ret"] for r in both if r["agree"]]
+        out[h] = {"n": len(rows), "n_with_both_sources": len(both), "n_agreeing": len(agree),
+                  "share_disagreeing": (1 - len(agree) / len(both)) if both else None,
+                  "median_all": median([r["ret"] for r in rows]) if rows else None, "median_agreeing": median(agree) if agree else None}
+    snaps = [s for rec in pop for s in rec["snaps"].values() if s.get("missed") == 0]
+    flags = [sources_agree(s) for s in snaps]
+    known = [f for f in flags if f is not None]
+    out["snapshots"] = {"n": len(snaps), "with_both_sources": len(known), "share_disagreeing_over_10pct": (1 - sum(known) / len(known)) if known else None}
+    return out
+
+
 def evaluate(db, B=10_000, seed=1):
     pop = population(db)
     overall = run_tests(pop, B, seed)
@@ -221,7 +251,7 @@ def evaluate(db, B=10_000, seed=1):
     for h in overall:
         passing = [w for w, t in per_week.items() if t[h].get("pass")]
         go[h] = len(passing) >= 2
-    return {"population": len(pop), "weeks": weeks, "overall": overall, "per_week": per_week, "go": go,
+    return {"population": len(pop), "weeks": weeks, "overall": overall, "per_week": per_week, "go": go, "robustness": robustness(pop),
             "note": "'go' (to paper trading) needs two separate weeks that each pass after Holm correction; H1 is a 'do not chase' result, not a trading rule."}
 
 
@@ -235,6 +265,9 @@ def report(result):
             if k in t and t[k].get("n"):
                 d = t[k]
                 print(f"       {k}: n={d['n']} median={100*d['median']:+.1f}% trimmed mean={100*d['trimmed_mean']:+.1f}% share<=-50%={100*d['share_le_minus50']:.0f}%")
+    rb = result.get("robustness", {}).get("snapshots", {})
+    if rb.get("with_both_sources"):
+        print(f"price sources: {rb['with_both_sources']} snapshots with both; {100*rb['share_disagreeing_over_10pct']:.1f}% disagree by more than 10%")
     print("go to paper trading:", result["go"])
 
 

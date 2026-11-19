@@ -51,7 +51,7 @@ def connect(path=DB_PATH):
       detect_delay_s REAL, liq_at_detect REAL, class TEXT, reason TEXT, launchpad TEXT, jup_verified INT, status TEXT, safety_done INT DEFAULT 0);
     CREATE TABLE IF NOT EXISTS snaps(pool TEXT, age_target_min INT, ts REAL, age_min REAL, price REAL, liq REAL, mcap REAL, fdv REAL,
       vol_m5 REAL, vol_h1 REAL, vol_h24 REAL, buys_m5 INT, sells_m5 INT, buys_h1 INT, sells_h1 INT, traders_h1 INT, chg_m5 REAL, chg_h1 REAL,
-      missed INT DEFAULT 0, PRIMARY KEY(pool, age_target_min));
+      missed INT DEFAULT 0, price_ds REAL, liq_ds REAL, PRIMARY KEY(pool, age_target_min));
     CREATE TABLE IF NOT EXISTS probes(pool TEXT, age_target_min INT, size_usd REAL, ts REAL, buy_ok INT, sell_ok INT, rt_pct REAL,
       impact_raw REAL, route TEXT, PRIMARY KEY(pool, age_target_min, size_usd));
     CREATE TABLE IF NOT EXISTS safety(pool TEXT PRIMARY KEY, ts REAL, score REAL, rugged INT, launchpad TEXT, jup_verified INT,
@@ -61,6 +61,10 @@ def connect(path=DB_PATH):
     CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value REAL);
     CREATE INDEX IF NOT EXISTS launches_status ON launches(status, created_ts);
     """)
+    have = {r[1] for r in db.execute("PRAGMA table_info(snaps)")}
+    for col in ("price_ds", "liq_ds"):                 # databases restored from before amendment A5 lack these columns
+        if col not in have:
+            db.execute(f"ALTER TABLE snaps ADD COLUMN {col} REAL")
     return db
 
 
@@ -143,6 +147,20 @@ def poll_stream(db, now, gt_get, pages=10):
 
 # ---------------------------------------------------------------- snapshots
 
+DS_PAIRS = "https://api.dexscreener.com/latest/dex/pairs/solana/"
+
+
+def parse_ds_pairs(j):
+    """DexScreener pairs response -> {pool address: {'price': float|None, 'liq': float|None}}. Used only as a cross-check of the primary price source."""
+    out = {}
+    for p in (j or {}).get("pairs", []) or []:
+        try:
+            f = lambda x: float(x) if x not in (None, "") else None
+            out[p["pairAddress"]] = {"price": f(p.get("priceUsd")), "liq": f((p.get("liquidity") or {}).get("usd"))}
+        except (KeyError, TypeError, ValueError):
+            continue
+    return out
+
 def due_targets(db, now):
     """[(pool, age_target_min, 'take'|'miss')] for observed launches. Take if age >= target and the delay is at most 50% of target + 2 min."""
     out = []
@@ -174,7 +192,7 @@ def parse_multi(j):
     return out
 
 
-def take_snapshots(db, now, gt_get, max_pools=60):
+def take_snapshots(db, now, gt_get, max_pools=60, http_json=None):
     todo = [x for x in due_targets(db, now) if x[2] == "take"]
     for pool, t, kind in [x for x in due_targets(db, now) if x[2] == "miss"]:
         db.execute("INSERT OR IGNORE INTO snaps(pool, age_target_min, ts, missed) VALUES(?,?,?,1)", (pool, t, now))
@@ -184,6 +202,12 @@ def take_snapshots(db, now, gt_get, max_pools=60):
     for i in range(0, len(pools), 30):
         chunk = pools[i:i + 30]
         data = parse_multi(gt_get("/pools/multi/" + ",".join(chunk)))
+        ds = {}
+        if http_json is not None:
+            try:
+                ds = parse_ds_pairs(http_json(DS_PAIRS + ",".join(chunk)))
+            except Exception:                              # the cross-check must never break the primary snapshot
+                ds = {}
         for pool in chunk:
             m = data.get(pool)
             created = db.execute("SELECT created_ts FROM launches WHERE pool=?", (pool,)).fetchone()["created_ts"]
@@ -192,10 +216,11 @@ def take_snapshots(db, now, gt_get, max_pools=60):
                     db.execute("INSERT OR IGNORE INTO snaps(pool, age_target_min, ts, age_min, missed) VALUES(?,?,?,?,2)", (pool, t, now, (now - created) / 60))
                     bump(db, "snaps_gone")
                     continue
-                db.execute("""INSERT OR IGNORE INTO snaps(pool,age_target_min,ts,age_min,price,liq,mcap,fdv,vol_m5,vol_h1,vol_h24,buys_m5,sells_m5,buys_h1,sells_h1,traders_h1,chg_m5,chg_h1)
-                              VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                d = ds.get(pool) or {}
+                db.execute("""INSERT OR IGNORE INTO snaps(pool,age_target_min,ts,age_min,price,liq,mcap,fdv,vol_m5,vol_h1,vol_h24,buys_m5,sells_m5,buys_h1,sells_h1,traders_h1,chg_m5,chg_h1,price_ds,liq_ds)
+                              VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                            (pool, t, now, (now - created) / 60, m["price"], m["liq"], m["mcap"], m["fdv"], m["vol_m5"], m["vol_h1"], m["vol_h24"],
-                            m["buys_m5"], m["sells_m5"], m["buys_h1"], m["sells_h1"], m["traders_h1"], m["chg_m5"], m["chg_h1"]))
+                            m["buys_m5"], m["sells_m5"], m["buys_h1"], m["sells_h1"], m["traders_h1"], m["chg_m5"], m["chg_h1"], d.get("price"), d.get("liq")))
                 taken += 1
     bump(db, "snaps_taken", taken)
     db.commit()
@@ -312,7 +337,7 @@ def cycle(db, now=None, gt_get=None, http_json=None, do_stream=True):
     st = {}
     if do_stream:
         st["stream"] = poll_stream(db, now, gt_get)
-    st["snaps"] = take_snapshots(db, now, gt_get)
+    st["snaps"] = take_snapshots(db, now, gt_get, http_json=http_json)
     px = sol_price(http_json)
     st["probes"] = run_probes(db, now, http_json, px) if px else 0
     st["safety"] = run_safety(db, now, http_json)

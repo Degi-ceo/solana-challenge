@@ -67,4 +67,7 @@ Detection delay (up to 5 min), GeckoTerminal price quality for thin pools, wash-
   (d) **H5 condition:** at the 6 h snapshot the price is 30-50% of the highest valid snapshot price at ages up to 6 h (a fall of 50-70% from the early peak).
   (e) **Minimum sample per primary cell:** H1 n >= 300; H2 and H5 the tested subset n >= 300 and the baseline n >= 300; H3 and H4 total n >= 300 with each group >= 100.
   (f) **Weekly rule:** a calendar week (by pool creation time, UTC, Monday start) counts if its own sample meets the minimum for that cell; "go" needs two such weeks that each pass after Holm correction.
+- **2026-11-19 (A5), before any return was computed on persisted data:** the collector also stores a **second price** (DexScreener) next to the primary GeckoTerminal price at every snapshot. It is a cross-check only:
+  it never enters a primary test. `eventstudy.robustness()` reports the share of snapshots where the two sources differ by more than 10% and the unconditional medians restricted to launches where both sources agree
+  at entry and exit. A large disagreement would weaken every price-based result and is reported in the daily report, not used to drop launches from the primary tests.
 
