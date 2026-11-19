@@ -50,7 +50,9 @@ jobs:
 
       - name: Tests
         if: steps.stop.outputs.stop != 'true'
-        run: python3 -W ignore -m unittest discover -s bot -p "test_*.py"
+        run: |
+          pip install -q solders
+          python3 -W ignore -m unittest discover -s bot -p "test_*.py"
 
       - name: Data sources reachable from this runner
         if: steps.stop.outputs.stop != 'true'
@@ -69,7 +71,7 @@ jobs:
           echo "start=$start" >> "$GITHUB_OUTPUT"
           minutes="${{ inputs.minutes }}"; minutes="${minutes:-335}"
           [ "$minutes" -gt 335 ] && minutes=335
-          ( while true; do sleep 7200; python3 bot/ci_persist.py persist || true; done ) &
+          ( sleep 600; python3 bot/ci_persist.py persist || true; while true; do sleep 3600; python3 bot/ci_persist.py persist || true; done ) &
           saver=$!
           cd bot
           timeout "${minutes}m" python3 -u -W ignore launches.py run > ../collector.log 2>&1 || true

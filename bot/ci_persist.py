@@ -3,7 +3,8 @@
 
   python3 ci_persist.py restore   # data branch -> bot/launches.db (skipped if the branch does not exist yet)
   python3 ci_persist.py persist   # bot/launches.db -> data branch (single rolling commit, force-with-lease)
-  python3 ci_persist.py stop?     # exit code 3 if a STOP file exists on the data branch (kill switch), else 0
+  python3 ci_persist.py publish-report REPORT.md   # rolling commit on the separate `report` branch
+  python3 ci_persist.py stop      # exit code 3 if a STOP file exists on the data branch (kill switch), else 0
 
 The remote is taken from env DATA_REMOTE (a URL or path); default 'origin' of the current repository. The data branch holds only
 data/collected/launches.db.gz, MANIFEST.json and a README. It is a rolling snapshot: history is deliberately not kept (the file would grow the repo by its size on every commit).
@@ -39,8 +40,8 @@ def remote(default_cwd=None):
     return git(["remote", "get-url", "origin"], cwd=default_cwd or BASE.parent).stdout.strip()
 
 
-def branch_exists(url):
-    return git(["ls-remote", "--exit-code", "--heads", url, BRANCH], check=False).returncode == 0
+def branch_exists(url, branch=BRANCH):
+    return git(["ls-remote", "--exit-code", "--heads", url, branch], check=False).returncode == 0
 
 
 def _clone(url, dest):
@@ -86,6 +87,28 @@ def persist(db_path=cb.DB, out_dir=cb.OUT, url=None):
     return man
 
 
+def publish_report(report_path, url=None, branch="report"):
+    """Publish REPORT.md as the single rolling commit of its own branch. It must NOT share the data branch: the collector force-pushes that one."""
+    url = url or remote()
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td) / "d"
+        if branch_exists(url, branch):
+            git(["clone", "--quiet", "--depth", "1", "--branch", branch, url, str(d)])
+        else:
+            d.mkdir()
+            git(["init", "--quiet", "-b", branch], cwd=d)
+            git(["remote", "add", "origin", url], cwd=d)
+        git(["config", "user.name", "collector-bot"], cwd=d)
+        git(["config", "user.email", "collector-bot@users.noreply.github.com"], cwd=d)
+        shutil.copy(report_path, d / "REPORT.md")
+        git(["add", "-A"], cwd=d)
+        has_commit = git(["rev-parse", "--verify", "HEAD"], cwd=d, check=False).returncode == 0
+        msg = "daily event-study report"
+        git(["commit", "--quiet", "--amend", "-m", msg] if has_commit else ["commit", "--quiet", "-m", msg], cwd=d)
+        git(["push", "--quiet", "--force-with-lease", "origin", f"HEAD:refs/heads/{branch}"], cwd=d)
+    return f"published to branch {branch}"
+
+
 def stop_requested(url=None):
     url = url or remote()
     if not branch_exists(url):
@@ -101,6 +124,8 @@ if __name__ == "__main__":
         print(restore())
     elif cmd == "persist":
         print(persist())
+    elif cmd == "publish-report":
+        print(publish_report(sys.argv[2] if len(sys.argv) > 2 else "REPORT.md"))
     elif cmd in ("stop?", "stop"):
         sys.exit(3 if stop_requested() else 0)
     else:

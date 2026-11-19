@@ -1,0 +1,40 @@
+name: daily-report
+
+# Runs the frozen, pre-registered analysis on the collected data once a day and publishes REPORT.md to the `report` branch.
+# Read-only with respect to the data: it restores a copy of the database, it never writes the `data` branch.
+on:
+  schedule:
+    - cron: "40 5 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: daily-report
+  cancel-in-progress: false
+
+permissions:
+  contents: write   # push the `report` branch
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DATA_REMOTE: https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore database from the data branch
+        run: python3 bot/ci_persist.py restore
+
+      - name: Generate report
+        working-directory: bot
+        run: |
+          if [ -f launches.db ]; then
+            python3 -W ignore report.py --out ../REPORT.md
+          else
+            printf '# Event-study report\n\nNo collector data yet.\n' > ../REPORT.md
+          fi
+          cat ../REPORT.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish to the report branch
+        run: python3 bot/ci_persist.py publish-report REPORT.md

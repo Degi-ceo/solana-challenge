@@ -106,3 +106,13 @@ Expected gap between runs: a few minutes per 5.5 hours. No secrets are needed: t
 
 **Controls.** Stop at any time: put a file named `STOP` on the `data` branch (the run in progress finishes, no new run is chained), or disable the workflow in the Actions tab. Start manually: Actions tab, graduation-collector, Run workflow.
 **Using the data in a Claude session or locally:** `git fetch origin data`, then `git show origin/data:data/collected/launches.db.gz > data/collected/launches.db.gz` (and `MANIFEST.json`), then `python3 bot/collect_backup.py restore`.
+
+### Added 2026-11-19 (pending merge): hourly saves and a daily report
+- The collector now saves to the `data` branch 10 minutes after start and then every hour (it was every 2 hours), so a crashed runner costs at most about an hour.
+- `.github/workflows/report.yml` runs the frozen analysis once a day (05:40 UTC) and publishes `REPORT.md` to a separate `report` branch (one rolling commit). It restores a copy of the database and never writes the `data` branch,
+  because the collector force-pushes that one. Read it at `https://github.com/Degi-ceo/solana-challenge/blob/report/REPORT.md`.
+
+### Paper trading inside the collector (pending merge)
+`launches.py run` also paper-trades graduates with rule set R1 (`bot/paper.py`, amendment A6): fresh Jupiter quotes, no take-profit cap, trailing stop, stop at -20%, $2.50 per position, at most 2 open, daily loss limit and KILL file.
+It runs in the same loop (open positions are polled about once a minute) and needs no extra setup. Positions live in the same database, so they survive between runs with the data branch. `python3 bot/launches.py stats` and REPORT.md show the result.
+Paper only: there is no wallet, no key and no transaction anywhere in this code.

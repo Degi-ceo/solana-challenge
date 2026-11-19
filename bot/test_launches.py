@@ -83,6 +83,46 @@ class TestStreamGaps(unittest.TestCase):
         self.assertEqual(L.meta(db, "stream_gaps"), 0)
 
 
+class TestAdaptivePolling(unittest.TestCase):
+    def pages(self, per_page, total, base):
+        """Fake listing: `total` pools, newest first, `per_page` per page; records which pages were requested."""
+        rows = [gt_row(f"{base}{i}", "pumpswap", 9000, NOW - i) for i in range(total)]
+        asked = []
+
+        def fn(path):
+            pg = int(path.split("page=")[1])
+            asked.append(pg)
+            return listing(*rows[(pg - 1) * per_page: pg * per_page])
+        return fn, asked
+
+    def test_stops_as_soon_as_it_reaches_pools_already_seen(self):
+        db = new_db()
+        fn, asked = self.pages(20, 100, "a")
+        L.poll_stream(db, NOW, fn, pages=10)                               # first poll of a fresh database: three pages at most
+        self.assertEqual(asked, [1, 2, 3])
+        # next poll: 30 pools are newer than anything seen before, the rest are old ones
+        newer = [gt_row(f"n{i}", "pumpswap", 9000, NOW + 100 + i) for i in range(30)]
+        older = [gt_row(f"a{i}", "pumpswap", 9000, NOW - i) for i in range(100)]
+        rows = newer[::-1] + older
+        asked2 = []
+
+        def fn2(path):
+            pg = int(path.split("page=")[1])
+            asked2.append(pg)
+            return listing(*rows[(pg - 1) * 20: pg * 20])
+        L.poll_stream(db, NOW + 60, fn2, pages=10)
+        self.assertEqual(asked2, [1, 2])                                   # page 2 contains the overlap, so page 3 is never requested
+        self.assertEqual(L.meta(db, "stream_gaps"), 0)
+
+    def test_hitting_the_page_limit_without_overlap_is_a_gap(self):
+        db = new_db()
+        fn, _ = self.pages(20, 100, "a")
+        L.poll_stream(db, NOW, fn, pages=10)
+        rows = [gt_row(f"z{i}", "pumpswap", 9000, NOW + 1000 + i) for i in range(400)]     # 400 new pools: far more than 3 pages
+        L.poll_stream(db, NOW + 60, lambda path: listing(*rows[(int(path.split("page=")[1]) - 1) * 20: int(path.split("page=")[1]) * 20]), pages=3)
+        self.assertEqual(L.meta(db, "stream_gaps"), 1)
+
+
 class TestSnapshots(unittest.TestCase):
     def setUp(self):
         self.db = new_db()
@@ -132,6 +172,45 @@ class TestSnapshots(unittest.TestCase):
         L.ingest(self.db, L.parse_pools(listing(gt_row("tinyx", "pumpswap", 100, NOW))), NOW + 30)
         L.take_snapshots(self.db, NOW + 90, lambda path: fx("gt_multi.json"))
         self.assertEqual(self.db.execute("SELECT COUNT(*) FROM snaps WHERE pool='tinyx'").fetchone()[0], 0)
+
+
+class TestCrossCheckPrice(unittest.TestCase):
+    def setUp(self):
+        self.db = new_db()
+        L.ingest(self.db, L.parse_pools(listing(gt_row(POOL_A, "pumpswap", 12_000, NOW))), NOW + 30)
+
+    def test_parse_ds_pairs_skips_bad_rows(self):
+        d = L.parse_ds_pairs(fx("ds_pairs.json"))
+        self.assertEqual(set(d), {POOL_A})
+        self.assertAlmostEqual(d[POOL_A]["price"], 74.40)
+
+    def test_second_price_is_stored_next_to_the_primary_one(self):
+        http = lambda url, body=None, retries=2, timeout=15: fx("ds_pairs.json")
+        L.take_snapshots(self.db, NOW + 90, lambda p: fx("gt_multi.json"), http_json=http)
+        r = self.db.execute("SELECT price, price_ds, liq_ds FROM snaps WHERE age_target_min=1").fetchone()
+        self.assertGreater(r["price"], 0)
+        self.assertAlmostEqual(r["price_ds"], 74.40)
+
+    def test_cross_check_failure_never_breaks_the_primary_snapshot(self):
+        def boom(url, body=None, retries=2, timeout=15):
+            raise RuntimeError("dexscreener down")
+        n = L.take_snapshots(self.db, NOW + 90, lambda p: fx("gt_multi.json"), http_json=boom)
+        self.assertEqual(n, 1)
+        r = self.db.execute("SELECT price, price_ds FROM snaps WHERE age_target_min=1").fetchone()
+        self.assertGreater(r["price"], 0)
+        self.assertIsNone(r["price_ds"])
+
+    def test_old_databases_are_migrated(self):
+        import sqlite3
+        c = sqlite3.connect(":memory:")
+        c.executescript("CREATE TABLE snaps(pool TEXT, age_target_min INT, ts REAL, age_min REAL, price REAL, liq REAL, mcap REAL, fdv REAL, vol_m5 REAL, vol_h1 REAL, vol_h24 REAL, buys_m5 INT, sells_m5 INT, buys_h1 INT, sells_h1 INT, traders_h1 INT, chg_m5 REAL, chg_h1 REAL, missed INT DEFAULT 0, PRIMARY KEY(pool, age_target_min));")
+        import tempfile, os
+        path = os.path.join(tempfile.mkdtemp(), "old.db")
+        old = sqlite3.connect(path)
+        old.executescript("CREATE TABLE snaps(pool TEXT, age_target_min INT, ts REAL, age_min REAL, price REAL, liq REAL, mcap REAL, fdv REAL, vol_m5 REAL, vol_h1 REAL, vol_h24 REAL, buys_m5 INT, sells_m5 INT, buys_h1 INT, sells_h1 INT, traders_h1 INT, chg_m5 REAL, chg_h1 REAL, missed INT DEFAULT 0, PRIMARY KEY(pool, age_target_min));")
+        old.close()
+        cols = {r[1] for r in L.connect(path).execute("PRAGMA table_info(snaps)")}
+        self.assertTrue({"price_ds", "liq_ds"} <= cols)
 
 
 class TestProbes(unittest.TestCase):

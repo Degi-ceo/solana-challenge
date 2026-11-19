@@ -92,6 +92,22 @@ class TestPersist(unittest.TestCase):
             subprocess.run(["git"] + a, cwd=w, check=True)
         self.assertTrue(C.stop_requested(self.remote))
 
+    def test_report_goes_to_its_own_branch_and_never_touches_the_data_branch(self):
+        make_db(self.db, 2)
+        C.persist(self.db, self.out, url=self.remote)
+        data_sha = subprocess.run(["git", "--git-dir", self.remote, "rev-parse", "data"], capture_output=True, text=True).stdout.strip()
+        rep = Path(self.td) / "REPORT.md"
+        rep.write_text("# r1")
+        C.publish_report(rep, url=self.remote)
+        rep.write_text("# r2")
+        C.publish_report(rep, url=self.remote)
+        self.assertEqual(subprocess.run(["git", "--git-dir", self.remote, "rev-parse", "data"], capture_output=True, text=True).stdout.strip(), data_sha)
+        self.assertEqual(subprocess.run(["git", "--git-dir", self.remote, "rev-list", "--count", "report"], capture_output=True, text=True).stdout.strip(), "1")
+        shown = subprocess.run(["git", "--git-dir", self.remote, "show", "report:REPORT.md"], capture_output=True, text=True).stdout
+        self.assertEqual(shown, "# r2")
+        # the collector can still persist after a report was published (no force-with-lease conflict)
+        C.persist(self.db, self.out, url=self.remote)
+
     def test_restore_refuses_a_corrupted_snapshot(self):
         make_db(self.db, 2)
         C.persist(self.db, self.out, url=self.remote)

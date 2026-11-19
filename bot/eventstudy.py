@@ -28,18 +28,19 @@ BAD_EXT = {"transferFeeConfig", "transferHook", "permanentDelegate"}
 
 # ---------------------------------------------------------------- data access
 
+def load_record(db, r):
+    snaps = {s["age_target_min"]: dict(s) for s in db.execute("SELECT * FROM snaps WHERE pool=?", (r["pool"],))}
+    probes = {(p["age_target_min"], p["size_usd"]): dict(p) for p in db.execute("SELECT * FROM probes WHERE pool=?", (r["pool"],))}
+    sf = db.execute("SELECT * FROM safety WHERE pool=?", (r["pool"],)).fetchone()
+    return {"pool": r["pool"], "mint": r["mint"], "created_ts": r["created_ts"], "snaps": snaps, "probes": probes, "safety": dict(sf) if sf else None}
+
+
 def population(db):
     """First observed pool per mint, memecoin classes only."""
     rows = db.execute("""SELECT l.* FROM launches l WHERE l.status='observed' AND l.class IN (?,?)
                          AND l.created_ts = (SELECT MIN(x.created_ts) FROM launches x WHERE x.mint=l.mint AND x.status='observed')
                          GROUP BY l.mint""", POP).fetchall()
-    out = []
-    for r in rows:
-        snaps = {s["age_target_min"]: dict(s) for s in db.execute("SELECT * FROM snaps WHERE pool=?", (r["pool"],))}
-        probes = {(p["age_target_min"], p["size_usd"]): dict(p) for p in db.execute("SELECT * FROM probes WHERE pool=?", (r["pool"],))}
-        sf = db.execute("SELECT * FROM safety WHERE pool=?", (r["pool"],)).fetchone()
-        out.append({"pool": r["pool"], "mint": r["mint"], "created_ts": r["created_ts"], "snaps": snaps, "probes": probes, "safety": dict(sf) if sf else None})
-    return out
+    return [load_record(db, r) for r in rows]
 
 
 def iso_week(ts):
@@ -73,10 +74,11 @@ def outcome(rec, a, b):
     return "ok", gross - rt / 100 - NET_FEE_RT_USD / SIZE_USD, info
 
 
-def gates(rec, a):
-    """Safety gates at entry age a. Returns dict or None if the safety report is unavailable at entry time (no look-ahead)."""
+def gates(rec, a, enforce_time=True):
+    """Safety gates at entry age a. Returns dict or None if the safety report is unavailable at entry time (no look-ahead).
+    enforce_time=False is for live paper trading, where the decision time is NOW and any report already stored is legitimately known."""
     e, s = rec["snaps"].get(a), rec["safety"]
-    if not s or not e or s["ts"] > e["ts"]:
+    if not s or not e or (enforce_time and s["ts"] > e["ts"]):
         return None
     ext = set(json.loads(s["extensions"] or "[]"))
     insider_flag = bool(s["insiders_detected"]) or (s["top10_pct_ex_lp"] or 0) > 40
@@ -87,13 +89,26 @@ def gates(rec, a):
             and not (ext & BAD_EXT) and rt is not None and rt <= SELL_GATE_PCT}
 
 
+PRICE_TOL = 0.10
+
+
+def sources_agree(snap, tol=PRICE_TOL):
+    """True/False when both price sources exist for the snapshot, None when the cross-check price is missing."""
+    p, q = snap.get("price"), snap.get("price_ds")
+    if not p or not q or p <= 0 or q <= 0:
+        return None
+    return abs(p / q - 1) <= tol
+
+
 def collect(pop, a, b):
     rows, counts = [], {"ok": 0, "not_enterable": 0, "no_probe": 0, "no_entry": 0, "incomplete": 0}
     for rec in pop:
         st, v, info = outcome(rec, a, b)
         counts[st] += 1
         if st == "ok":
-            rows.append({"rec": rec, "ret": v, "unsellable": info["unsellable"], "gate": gates(rec, a), "week": iso_week(rec["created_ts"])})
+            ea, xa = sources_agree(rec["snaps"][a]), sources_agree(rec["snaps"][b])
+            rows.append({"rec": rec, "ret": v, "unsellable": info["unsellable"], "gate": gates(rec, a), "week": iso_week(rec["created_ts"]),
+                         "agree": None if (ea is None or xa is None) else (ea and xa)})
     return rows, counts
 
 
@@ -113,9 +128,16 @@ def trimmed_mean(xs, cut=0.10):
 
 
 def describe(xs):
+    """Median and trimmed mean describe the typical launch; the UNTRIMMED mean and the tail figures keep the runners visible
+    (a strategy that lives on rare large winners is invisible to the median and to a trimmed mean)."""
     if not xs:
         return {"n": 0}
-    return {"n": len(xs), "median": median(xs), "trimmed_mean": trimmed_mean(xs), "share_le_minus50": sum(x <= -0.5 for x in xs) / len(xs)}
+    s = sorted(xs, reverse=True)
+    pos = sum(x for x in xs if x > 0)
+    k = max(1, round(0.01 * len(xs)))
+    return {"n": len(xs), "median": median(xs), "trimmed_mean": trimmed_mean(xs), "mean": sum(xs) / len(xs), "share_le_minus50": sum(x <= -0.5 for x in xs) / len(xs),
+            "max": s[0], "share_ge_2x": sum(x >= 1.0 for x in xs) / len(xs), "top1pct_share_of_gains": (sum(s[:k]) / pos) if pos > 0 else None,
+            "mean_without_top1pct": sum(s[k:]) / max(1, len(xs) - k)}
 
 
 def boot(stat, xs, B, rng):
@@ -212,6 +234,23 @@ def run_tests(pop, B=10_000, seed=1):
     return res
 
 
+def robustness(pop):
+    """Descriptive checks that never change a primary test: do the two price sources agree, and does the unconditional median survive restricting to agreeing launches?"""
+    out = {}
+    for h in ("H1", "H2", "H5"):
+        rows, _ = collect(pop, *CELLS[h])
+        both = [r for r in rows if r["agree"] is not None]
+        agree = [r["ret"] for r in both if r["agree"]]
+        out[h] = {"n": len(rows), "n_with_both_sources": len(both), "n_agreeing": len(agree),
+                  "share_disagreeing": (1 - len(agree) / len(both)) if both else None,
+                  "median_all": median([r["ret"] for r in rows]) if rows else None, "median_agreeing": median(agree) if agree else None}
+    snaps = [s for rec in pop for s in rec["snaps"].values() if s.get("missed") == 0]
+    flags = [sources_agree(s) for s in snaps]
+    known = [f for f in flags if f is not None]
+    out["snapshots"] = {"n": len(snaps), "with_both_sources": len(known), "share_disagreeing_over_10pct": (1 - sum(known) / len(known)) if known else None}
+    return out
+
+
 def evaluate(db, B=10_000, seed=1):
     pop = population(db)
     overall = run_tests(pop, B, seed)
@@ -221,7 +260,7 @@ def evaluate(db, B=10_000, seed=1):
     for h in overall:
         passing = [w for w, t in per_week.items() if t[h].get("pass")]
         go[h] = len(passing) >= 2
-    return {"population": len(pop), "weeks": weeks, "overall": overall, "per_week": per_week, "go": go,
+    return {"population": len(pop), "weeks": weeks, "overall": overall, "per_week": per_week, "go": go, "robustness": robustness(pop),
             "note": "'go' (to paper trading) needs two separate weeks that each pass after Holm correction; H1 is a 'do not chase' result, not a trading rule."}
 
 
@@ -234,7 +273,10 @@ def report(result):
         for k in ("desc", "desc_baseline", "desc_flagged", "desc_clean", "desc_pass", "desc_fail"):
             if k in t and t[k].get("n"):
                 d = t[k]
-                print(f"       {k}: n={d['n']} median={100*d['median']:+.1f}% trimmed mean={100*d['trimmed_mean']:+.1f}% share<=-50%={100*d['share_le_minus50']:.0f}%")
+                print(f"       {k}: n={d['n']} median={100*d['median']:+.1f}% trimmed mean={100*d['trimmed_mean']:+.1f}% mean={100*d['mean']:+.1f}% share<=-50%={100*d['share_le_minus50']:.0f}% share>=2x={100*d['share_ge_2x']:.1f}%")
+    rb = result.get("robustness", {}).get("snapshots", {})
+    if rb.get("with_both_sources"):
+        print(f"price sources: {rb['with_both_sources']} snapshots with both; {100*rb['share_disagreeing_over_10pct']:.1f}% disagree by more than 10%")
     print("go to paper trading:", result["go"])
 
 

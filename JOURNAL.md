@@ -1,5 +1,39 @@
 # JOURNAL (source of truth between sessions — update every session)
 
+## 2026-11-19 — first real data from GitHub Actions; live executor built (disabled), stream poller fixed
+- Collector check (the two scheduled follow-ups): run #1 finished with success at 04:50:04 UTC and run #2 started at 04:50:00 by the workflow itself (gap about zero). The `data` branch holds 1,867 launches, 5,465 snapshots,
+  1,496 cost probes and 931 safety reports from 23:14 to 04:45 (5.5 h). Observed graduates 1,035 (188/h), memecoin population 512 (96 confirmed + 417 probable, about 93/h; the earlier sandbox estimate of 65/h was low).
+  Detection delay median 156 s, p90 251 s. 519 observed pools are class 'unknown' (no launchpad evidence, mostly other DEX pools): outside the analysis population by pre-registration, reported.
+- PROBLEM FOUND: 24 of 126 polls (19%) did not overlap the previous poll, so pools created in bursts may have been missed. Fix (amendment A7, collection only): adaptive paging until overlap, polling every minute, gap still
+  counted when the page limit is hit. 2 new tests (28 in test_launches). Launches missed before the fix cannot be recovered; the gap count travels with every result.
+- No test reached its minimum sample yet (the 6 h exits had not matured). The run in progress (#2) uses the OLD workflow: the fixes, paper trading R1, price cross-check, daily report and hourly saves need PR #2 merged.
+- Built the live path the user asked for, so real trading is a configuration change for the OWNER later: `bot/executor.py` (quote -> build -> validate -> simulate -> sign -> send -> confirm -> close token account),
+  `bot/live.py` (engine on the same signals as paper R1; dry mode sends nothing and needs only a public key), `docs/LIVE.md` (steps, limits, what is not verified). Hard caps in code (config can only tighten), four independent
+  conditions for any send, agent-sandbox detection, burner wallet balance cap, key file rules, KILL file stops entries but not exits.
+  The transaction validator was checked against a REAL Jupiter swap transaction (8 instructions: ComputeBudget x2, ATA, System transfer, Token SyncNative, ATA, Jupiter route, Token CloseAccount) and rejects malicious variants
+  (extra transfer, unknown program, close/ATA to another owner, wrong fee payer). 43 executor and live tests; 9 deliberate mutations of the safety-critical code are each caught. A test scans tracked files for key-like content.
+- Nothing was run with a funded wallet and no key exists in this environment. Not verified: mainnet landing and fees, `priceImpactPct` unit, Token-2022 close path (mocks only).
+
+## 2026-11-19 — user pushed back on the two-week rule: paper trading R1 added, reporting made tail-aware (pending merge of PR #2)
+- Valid criticism accepted: a median or trimmed mean is blind to a strategy that lives on rare large winners. Amendment A6 (before any trade or persisted return): every cell also reports the untrimmed mean,
+  the share of returns at or above +100%, the share of total gain from the top 1%, and the mean without that top 1%. Primary median tests unchanged.
+- Clarification kept: the weekly rule governs when an EDGE may be claimed from the event study; it never blocked paper trading. Real-money trading from this repository's sessions stays out of scope (hard rule); the owner decides outside.
+- Built `bot/paper.py` (H7, rule set R1, fixed and not tuned): entry 15 min after graduation if all safety gates pass and a fresh $2.50 Jupiter round trip is at most 3%; $2.50 per position, at most 2 open of a $5 bankroll;
+  stop -20%, NO take-profit, trailing stop 30% below the peak once +50%, liquidity/vanish/48 h exits, failed sell = -100%, P&L from the polled price minus the measured round trip and $0.02. Integrated into the collector loop.
+  17 tests; five deliberate mutations (a +40% take-profit cap, ignored stop, trail armed from the start, uncapped loss, skipped gates) are each caught. 131 tests pass.
+- Evidence statement for H7 (A6c): with fewer than 30 closed trades the report says so; with 30 or more it states whether the 95% bootstrap interval of the mean net return per trade excludes zero and the share of gains from the best trade.
+- Dashboard and REPORT.md now show paper equity, P&L, trades and exit reasons. Takes effect for the collector after PR #2 is merged and the next run starts.
+
+## 2026-11-19 — experiment hardening while data accrues (PR #2, awaiting merge)
+- User asked why collection takes so long if over 100,000 memecoins launch per day. Measured: about 66,000-120,000 new pools per day, but 86% sit on bonding curves and never reach a DEX; the testable
+  population (memecoin graduates after the size and class filters) is about 65 per hour (about 1,500 per day). The wait is not for tokens: it is for outcomes to mature (6 h, 24 h, 48 h exits) and for a second
+  separate week (pre-registered rule against being fooled by one market regime). Free APIs (about one request per 5 seconds) also cannot snapshot all 100,000 pools at ten ages.
+- Added: DexScreener price cross-check stored with every snapshot (amendment A5; robustness only), `eventstudy.robustness()`, `bot/report.py` -> REPORT.md (coverage, quiet periods, price agreement,
+  pre-registered tests, caveats), `.github/workflows/report.yml` (daily, publishes to a `report` branch so it never collides with the collector's force-pushed `data` branch), hourly saves in the collector.
+  7 + 3 + 5 new tests (113 total); actionlint clean. The running collector (run #1) still has the old two-hour save interval; the changes take effect from run #2 after the merge.
+- Expected time to the pre-registered minimum of 300 per cell (estimates, not measurements): H3 about half a day, H2 about 1-2 days (depends on how many launches pass all gates), H1 needs 48 h of pool age,
+  H5 needs a 50-70% fall from the early peak and may need many days or never reach 300 in a single week.
+
 ## 2026-11-18 — GitHub Actions collector prepared (user chose GitHub as the host); not enabled
 - Checked: repository is PRIVATE (personal account), default branch `main` holds only the first skeleton, no workflows exist, PR #1 (draft) is open from the dev branch.
   Two consequences: schedules and dispatches run only from `main`, so the workflow must be merged there; and a continuous collector (about 43,000 minutes per month) would exhaust a private repository's allowance.

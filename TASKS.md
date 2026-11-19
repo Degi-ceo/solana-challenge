@@ -17,7 +17,7 @@ does not invent one in noise, and reports inconclusive below the minimum n.
 ## 6. Realistic paper execution + safety gates
 Quote-based fills at decision time, measured network fee, failure probability, position-size choice; RugCheck/Token-2022/sell gates as code with fixture tests. Only for rules that passed task 5.
 
-## 7. Live executor (written, mocked, DISABLED)  `bot/executor.py` on `api.jup.ag`. Never run with real funds from the web session.
+## 7. [done] Live executor (written, mocked, DISABLED)  `bot/executor.py` + `bot/live.py` on `api.jup.ag`, instructions in docs/LIVE.md. Never run with real funds from the web session; the owner runs it.
 
 ## 8. Reporting and dashboard  `bot/report.py` -> REPORT.md; dashboard shows the stream, per-age samples and the pre-registered tests.
 

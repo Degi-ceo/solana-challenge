@@ -67,4 +67,19 @@ Detection delay (up to 5 min), GeckoTerminal price quality for thin pools, wash-
   (d) **H5 condition:** at the 6 h snapshot the price is 30-50% of the highest valid snapshot price at ages up to 6 h (a fall of 50-70% from the early peak).
   (e) **Minimum sample per primary cell:** H1 n >= 300; H2 and H5 the tested subset n >= 300 and the baseline n >= 300; H3 and H4 total n >= 300 with each group >= 100.
   (f) **Weekly rule:** a calendar week (by pool creation time, UTC, Monday start) counts if its own sample meets the minimum for that cell; "go" needs two such weeks that each pass after Holm correction.
+- **2026-11-19 (A5), before any return was computed on persisted data:** the collector also stores a **second price** (DexScreener) next to the primary GeckoTerminal price at every snapshot. It is a cross-check only:
+  it never enters a primary test. `eventstudy.robustness()` reports the share of snapshots where the two sources differ by more than 10% and the unconditional medians restricted to launches where both sources agree
+  at entry and exit. A large disagreement would weaken every price-based result and is reported in the daily report, not used to drop launches from the primary tests.
+- **2026-11-19 (A6), before any paper trade was opened and before any return was computed on persisted data:**
+  (a) **Reporting change.** Medians and trimmed means describe the typical launch but are blind to a strategy that lives on rare large winners. Every cell therefore also reports the **untrimmed mean, the share of
+  returns at or above +100%, the share of total gains coming from the top 1%, and the mean without that top 1%**. The primary tests (median-based) are unchanged; these are reported beside them, not as extra tests.
+  (b) **H7, forward paper trading with rule set R1** (`bot/paper.py`, fixed, not tuned): entry on a graduate in the analysis population when its 15-minute snapshot is at most 5 minutes old, all safety gates pass and a fresh $2.50
+  Jupiter round trip is at most 3%; size $2.50, at most 2 open positions of a $5 bankroll, one per token; exits: stop -20% from entry, **no take-profit**, trailing stop 30% below the peak once the peak is +50%,
+  liquidity below half of entry or under $500, pool gone for 3 polls, maximum hold 48 h; a failed sell quote at exit counts as -100%; P&L = size x (exit/entry - 1 - measured round trip) - $0.02. Daily loss limit $1.5, KILL file stops entries.
+  H7 is **forward and exploratory**: it runs continuously without waiting for any week rule, is not part of the Holm family, and is always reported with a bootstrap interval of the mean net return per trade.
+  (c) **Evidence statement for H7.** With fewer than 30 closed trades the report says "not enough trades". With 30 or more it states whether the 95% bootstrap interval of the mean net return per trade excludes zero and how much of the total gain comes
+  from the single best trade. Whether to risk real money on it is the owner's decision, made outside this repository's sessions; the report only states the evidence level.
+- **2026-11-19 (A7), collection procedure only, no change to any definition or test:** the first 5.5 hours of persisted data showed that 24 of 126 stream polls (19%) did not overlap the previous poll, so pools
+  created during bursts may have been missed. The poller now fetches pages adaptively until it reaches pools already seen and runs every minute; a poll that hits the page limit without overlap is still counted as a stream gap
+  and reported. Launches missed before this change cannot be recovered; the gap count is reported with every result so the size of the possible bias is visible.
 
