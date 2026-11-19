@@ -28,8 +28,9 @@ DB_PATH = BASE / "launches.db"
 GT = "/new_pools?page={p}"
 SOL = "So11111111111111111111111111111111111111112"
 AGES_MIN = [1, 5, 15, 30, 60, 120, 360, 1440, 2880, 4320]
-PROBE_AGES = {5, 15, 60, 360}
-PROBE_SIZES_USD = [1.0, 2.5]
+PROBE_AGES = {15, 360}        # amendment A8: only the ages that the pre-registered tests use as entry ages
+PROBE_SIZES_USD = [2.5]       # amendment A8: only the position size actually used
+PROBE_MAX_LAG_S = 300         # a probe is only taken within this many seconds of its snapshot (stale quotes are useless and would only grow a backlog)
 SAFETY_AGE_MIN = 5
 MAX_DETECT_DELAY_S = 600   # amendment A2: GeckoTerminal lists new pools after a median of ~3.5 min; 5 min excluded ~27%
 MIN_LIQ_USD = 3_000
@@ -255,10 +256,12 @@ def round_trip(http_json, mint, size_usd, sol_usd, slippage_bps=300):
     return {"buy_ok": 1, "sell_ok": 1, "rt_pct": 100 * (1 - int(b["outAmount"]) / lam), "impact_raw": imp, "route": route}
 
 
-def run_probes(db, now, http_json, sol_usd, max_n=12, sleep=0.3):
-    """Probe launches that have a snapshot at a probe age but no probe yet."""
-    rows = db.execute("""SELECT s.pool, s.age_target_min, l.mint FROM snaps s JOIN launches l ON l.pool=s.pool
-                         WHERE s.missed=0 AND s.age_target_min IN (%s)""" % ",".join(str(a) for a in sorted(PROBE_AGES))).fetchall()
+def run_probes(db, now, http_json, sol_usd, max_n=40, sleep=0.3):
+    """Cost probes for FRESH snapshots only (newest first), analysis population only. A snapshot older than PROBE_MAX_LAG_S is never probed:
+    a stale quote cannot describe the entry and an ever-growing backlog is exactly the defect found in the first 17 h of data."""
+    rows = db.execute("""SELECT s.pool, s.age_target_min, s.ts AS snap_ts, l.mint FROM snaps s JOIN launches l ON l.pool=s.pool
+                         WHERE s.missed=0 AND s.age_target_min IN (%s) AND l.class IN ('memecoin_confirmed','memecoin_probable') AND s.ts >= ?
+                         ORDER BY s.ts DESC""" % ",".join(str(a) for a in sorted(PROBE_AGES)), (now - PROBE_MAX_LAG_S,)).fetchall()
     n = 0
     for r in rows:
         for size in PROBE_SIZES_USD:
@@ -306,8 +309,10 @@ def parse_safety(report):
             "risks": json.dumps([x.get("name") for x in r.get("risks", []) if isinstance(x, dict)])}
 
 
-def run_safety(db, now, http_json, max_n=8, sleep=0.4):
-    rows = db.execute("""SELECT pool, mint, dex, liq_at_detect, created_ts FROM launches WHERE status='observed' AND safety_done=0""").fetchall()
+def run_safety(db, now, http_json, max_n=30, sleep=0.3):
+    """Launches aged 5-15 minutes come first: the pre-registered gates need the report BEFORE the 15-minute snapshot. Older ones only get leftover capacity."""
+    rows = db.execute("""SELECT pool, mint, dex, liq_at_detect, created_ts FROM launches WHERE status='observed' AND safety_done=0
+                         ORDER BY CASE WHEN ? - created_ts < 900 THEN 0 ELSE 1 END, created_ts""", (now,)).fetchall()
     n = 0
     for r in rows:
         if n >= max_n or (now - r["created_ts"]) / 60 < SAFETY_AGE_MIN:
@@ -342,13 +347,12 @@ def sol_price(http_json):
 
 
 def cycle(db, now=None, gt_get=None, http_json=None, do_stream=True, paper_on=True, live_engine=None):
+    """Order matters: snapshots, cost probes and safety reports are time-critical (they must happen within minutes of an age), the stream poll is slow (several rate-limited calls), so it goes last."""
     import data
     now = now or time.time()
     gt_get = gt_get or data.gt_get
     http_json = http_json or bot.http_json
     st = {}
-    if do_stream:
-        st["stream"] = poll_stream(db, now, gt_get)
     st["snaps"] = take_snapshots(db, now, gt_get, http_json=http_json)
     px = sol_price(http_json)
     st["probes"] = run_probes(db, now, http_json, px) if px else 0
@@ -358,6 +362,8 @@ def cycle(db, now=None, gt_get=None, http_json=None, do_stream=True, paper_on=Tr
         st["paper"] = paper.step(db, now, gt_get, http_json, px)
     if live_engine is not None and px:
         st["live"] = live_engine.step(db, now, gt_get, http_json, px)
+    if do_stream:
+        st["stream"] = poll_stream(db, now, gt_get)
     return st
 
 

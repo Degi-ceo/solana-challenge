@@ -83,3 +83,9 @@ Detection delay (up to 5 min), GeckoTerminal price quality for thin pools, wash-
   created during bursts may have been missed. The poller now fetches pages adaptively until it reaches pools already seen and runs every minute; a poll that hits the page limit without overlap is still counted as a stream gap
   and reported. Launches missed before this change cannot be recovered; the gap count is reported with every result so the size of the possible bias is visible.
 
+- **2026-11-19 (A8), collection procedure and one implementation constant, before any primary test could be evaluated (first 17 h of persisted data: H2 n=5, H3/H4 n=28):** the first persisted data showed a defect in
+  the collector, not a market result: cost probes ran oldest-first at 12 per cycle for 3 ages and 2 sizes, so only 383 of 1,538 15-minute snapshots got a $2.50 probe, with median lag 4.6 h (0% within 120 s), and only
+  21% of RugCheck reports were taken before the 15-minute snapshot. Changes: (a) cost probes are taken only at ages **15 min and 6 h** (the entry ages of the primary tests; ages 5 and 60 min dropped) and only at **$2.50**
+  (the size of the primary tests; $1 dropped), only for snapshots at most 300 s old, newest first, in the same cycle as the snapshot; (b) the **maximum probe lag in A4(a) rises from 120 s to 300 s** (a quote 2-5 minutes
+  after a snapshot still describes the entry; the cycle length makes 120 s unreachable); (c) RugCheck reports are fetched first for launches aged 5-15 min so they exist before the entry snapshot; (d) the slow stream poll runs last in the cycle.
+  No hypothesis, threshold, gate or decision rule changes. Data collected before this change keeps its missing probes: they are never imputed, and those launches are reported as `no_probe`.
