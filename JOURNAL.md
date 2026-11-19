@@ -213,3 +213,10 @@
 - Next: task 0 (network check), then task 1 (backtester).
 
 <!-- append new entries above this line, newest first -->
+
+
+## 2026-11-19 — Probe/safety backlog found in real data, fix + amendment A8
+- Real data after 17 h: H2 n=5, H3/H4 n=28. Cause was a collector defect, not the market: probes oldest-first, 12/cycle, 3 ages x 2 sizes -> only 383 of 1,538 15-min snapshots probed, median lag 4.6 h; only 21% of safety reports existed before the 15-min snapshot.
+- Fix (A8): probes only at ages 15 min and 6 h, $2.50 only, newest first, only if snapshot <= 300 s old; safety reports prioritised for launches aged 5-15 min; stream poll moved to end of cycle; PROBE_LAG_S 120 -> 300. Report now lists exclusion counts per cell.
+- Already collected launches stay `no_probe` (no imputation). Usable sample only grows from the new code on; expect ~90 graduates/h.
+- 177 tests pass.

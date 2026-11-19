@@ -59,6 +59,11 @@ def build(db, boot=10_000):
         n = t.get("n", t.get("n_flagged", 0) + t.get("n_clean", 0) if "n_flagged" in t else t.get("n_pass", 0) + t.get("n_fail", 0))
         extra = f" (p = {t['p']:.3f}, Holm {t['p_holm']:.3f})" if t.get("p") is not None else ""
         lines.append(f"| {h} | {t['claim']} | {n} | {t['min_n']} | {t['verdict']}{extra} |")
+    lines += ["", "Launches excluded from each cell before any statistic (a large 'no_probe' or 'incomplete' count means a collection problem, not a market result):", ""]
+    for h in ("H2", "H1", "H5"):
+        c = res["overall"][h].get("counts")
+        if c:
+            lines.append(f"- {h}: " + ", ".join(f"{k} {v}" for k, v in c.items()))
     lines += ["", f"Go to paper trading (needs two separate passing weeks): **{res['go']}**", ""]
     for h, t in res["overall"].items():
         for k in ("desc", "desc_baseline", "desc_flagged", "desc_clean", "desc_pass", "desc_fail"):

@@ -237,12 +237,19 @@ class TestProbes(unittest.TestCase):
     def test_probes_only_at_probe_ages_and_only_once(self):
         db = new_db()
         L.ingest(db, L.parse_pools(listing(gt_row(POOL_A, "pumpswap", 12_000, NOW))), NOW + 30)
-        L.take_snapshots(db, NOW + 400, lambda p: fx("gt_multi.json"))                           # ages 1 (missed) and 5 (taken)
+        L.take_snapshots(db, NOW + 960, lambda p: fx("gt_multi.json"))                           # ages 1, 5 (late: missed/taken) and 15 (taken)
         http = self.quotes(1_000_000, 12_500_000)
-        n1 = L.run_probes(db, NOW + 400, http, 75.0, sleep=0)
-        self.assertEqual(n1, 2)                                                                  # age 5 x two sizes
-        self.assertEqual(L.run_probes(db, NOW + 401, http, 75.0, sleep=0), 0)                    # idempotent
-        self.assertEqual({r[0] for r in db.execute("SELECT age_target_min FROM probes")}, {5})
+        n1 = L.run_probes(db, NOW + 960, http, 75.0, sleep=0)
+        self.assertEqual(n1, 1)                                                                  # A8: only age 15 and 360, only $2.50
+        self.assertEqual(L.run_probes(db, NOW + 961, http, 75.0, sleep=0), 0)                    # idempotent
+        self.assertEqual({r[0] for r in db.execute("SELECT age_target_min FROM probes")}, {15})
+
+    def test_stale_snapshots_are_not_probed(self):
+        db = new_db()
+        L.ingest(db, L.parse_pools(listing(gt_row(POOL_A, "pumpswap", 12_000, NOW))), NOW + 30)
+        L.take_snapshots(db, NOW + 960, lambda p: fx("gt_multi.json"))
+        n = L.run_probes(db, NOW + 960 + L.PROBE_MAX_LAG_S + 60, self.quotes(1_000_000, 12_500_000), 75.0, sleep=0)
+        self.assertEqual(n, 0)                                                                   # a quote this late would not describe the entry
 
 
 class TestSafety(unittest.TestCase):
@@ -314,10 +321,11 @@ class TestCycle(unittest.TestCase):
             L.cycle(db, NOW, gt, http)                                         # detect (age 20 s): nothing due yet
             self.assertEqual(db.execute("SELECT COUNT(*) FROM launches WHERE status='observed'").fetchone()[0], 1)
             self.assertEqual(db.execute("SELECT COUNT(*) FROM snaps").fetchone()[0], 0)
-            L.cycle(db, NOW + 400, gt, http, do_stream=False)                  # age ~7 min: snapshot 1 (missed), 5 (taken), probes, safety
+            L.cycle(db, NOW + 400, gt, http, do_stream=False)                  # age ~7 min: safety report taken (5-15 min window)
+            L.cycle(db, NOW + 960, gt, http, do_stream=False)                  # age 16 min: 15-min snapshot + fresh probe
         finally:
             _t.sleep = real_sleep
-        self.assertEqual(db.execute("SELECT COUNT(*) FROM snaps WHERE missed=0").fetchone()[0], 1)
+        self.assertGreaterEqual(db.execute("SELECT COUNT(*) FROM snaps WHERE missed=0").fetchone()[0], 1)
         self.assertGreater(db.execute("SELECT COUNT(*) FROM probes").fetchone()[0], 0)
         self.assertEqual(db.execute("SELECT safety_done FROM launches").fetchone()[0], 1)
 
