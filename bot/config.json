@@ -54,5 +54,15 @@
     "max_liq_now_usd": 50000000
   },
   "collect_interval_s": 300,
-  "onchain_checks_per_cycle": 5
+  "onchain_checks_per_cycle": 5,
+  "live": false,
+  "live_limits": {
+    "position_usd": 2.5,
+    "max_open": 2,
+    "daily_loss_usd": 1.5,
+    "slippage_bps": 300,
+    "wallet_usd": 15
+  },
+  "slippage_bps": 300,
+  "priority_lamports": 100000
 }

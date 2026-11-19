@@ -14,6 +14,7 @@ What it records (see docs/PREREGISTRATION.md for how it is analysed):
 Nothing is back-filled: a snapshot that was not taken in time is recorded as missed.
 """
 import json
+import os
 import sqlite3
 import sys
 import time
@@ -59,6 +60,9 @@ def connect(path=DB_PATH):
       total_holders INT, lp_locked_pct REAL, mint_authority INT, freeze_authority INT, transfer_fee_pct REAL, extensions TEXT,
       token_program TEXT, risks TEXT);
     CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value REAL);
+    CREATE TABLE IF NOT EXISTS live_positions(id INTEGER PRIMARY KEY, pool TEXT, mint TEXT, name TEXT, opened_ts REAL, entry_px REAL, entry_liq REAL, size_usd REAL,
+      lamports_spent INTEGER, tokens_raw INTEGER, sig_buy TEXT, peak_px REAL, last_px REAL, last_ts REAL, misses INT DEFAULT 0, status TEXT DEFAULT 'open',
+      closed_ts REAL, exit_px REAL, reason TEXT, sig_sell TEXT, lamports_received INTEGER, sol_usd REAL, pnl_usd REAL);
     CREATE TABLE IF NOT EXISTS paper_positions(id INTEGER PRIMARY KEY, pool TEXT, mint TEXT, name TEXT, opened_ts REAL, entry_px REAL, entry_liq REAL, size_usd REAL,
       rt_pct REAL, entry_delay_s REAL, peak_px REAL, last_px REAL, last_ts REAL, misses INT DEFAULT 0, status TEXT DEFAULT 'open',
       closed_ts REAL, exit_px REAL, reason TEXT, pnl_usd REAL);
@@ -126,17 +130,22 @@ def ingest(db, pools, now):
 
 
 def poll_stream(db, now, gt_get, pages=10):
-    """Fetch new_pools pages 1..pages, ingest, and detect coverage gaps between consecutive polls."""
+    """Fetch new_pools pages until they reach pools already seen in the previous poll (adaptive: fewer calls, so it can run every minute), then ingest.
+    A poll that hits the page limit without reaching the previous poll's newest pool is counted as a stream gap (pools may have been missed)."""
+    prev_newest = meta(db, "last_poll_newest_ts", 0.0)
     allp = []
     for pg in range(1, pages + 1):
         rows = parse_pools(gt_get(GT.format(p=pg)))
         if not rows:
             break
         allp.extend(rows)
+        if prev_newest and min(p["created_ts"] for p in rows) <= prev_newest:
+            break                                          # overlap reached: nothing newer is hiding on later pages
+        if not prev_newest and pg >= 3:
+            break                                          # first poll of a fresh database: no history to bridge
     c = ingest(db, allp, now)
     if allp:
         oldest, newest = min(p["created_ts"] for p in allp), max(p["created_ts"] for p in allp)
-        prev_newest = meta(db, "last_poll_newest_ts", 0.0)
         bump(db, "polls")
         if prev_newest and oldest > prev_newest:        # nothing overlaps with the previous poll -> pools may have been missed
             bump(db, "stream_gaps")
@@ -332,7 +341,7 @@ def sol_price(http_json):
         return None
 
 
-def cycle(db, now=None, gt_get=None, http_json=None, do_stream=True, paper_on=True):
+def cycle(db, now=None, gt_get=None, http_json=None, do_stream=True, paper_on=True, live_engine=None):
     import data
     now = now or time.time()
     gt_get = gt_get or data.gt_get
@@ -347,18 +356,26 @@ def cycle(db, now=None, gt_get=None, http_json=None, do_stream=True, paper_on=Tr
     if paper_on:
         import paper
         st["paper"] = paper.step(db, now, gt_get, http_json, px)
+    if live_engine is not None and px:
+        st["live"] = live_engine.step(db, now, gt_get, http_json, px)
     return st
 
 
 def run(db):
-    log("graduation collector started (read-only, no keys)")
+    engine = None
+    mode = os.environ.get("LIVE_ENGINE", "")
+    if mode in ("dry", "live"):
+        import live
+        engine = live.build_engine(mode)
+        log(f"live engine: {mode} ({'quotes, builds and simulates only' if mode == 'dry' else 'REAL transactions if every guard allows'})")
+    log("graduation collector started" + (" (live engine on)" if engine else " (read-only, no keys)"))
     next_stream = 0.0
     while True:
         try:
             now = time.time()
-            st = cycle(db, now, do_stream=now >= next_stream)
+            st = cycle(db, now, do_stream=now >= next_stream, live_engine=engine)
             if now >= next_stream:
-                next_stream = now + 120
+                next_stream = now + 60
             log(st)
         except Exception as e:
             log(f"launches cycle error: {e!r}")

@@ -1,5 +1,19 @@
 # JOURNAL (source of truth between sessions — update every session)
 
+## 2026-11-19 — first real data from GitHub Actions; live executor built (disabled), stream poller fixed
+- Collector check (the two scheduled follow-ups): run #1 finished with success at 04:50:04 UTC and run #2 started at 04:50:00 by the workflow itself (gap about zero). The `data` branch holds 1,867 launches, 5,465 snapshots,
+  1,496 cost probes and 931 safety reports from 23:14 to 04:45 (5.5 h). Observed graduates 1,035 (188/h), memecoin population 512 (96 confirmed + 417 probable, about 93/h; the earlier sandbox estimate of 65/h was low).
+  Detection delay median 156 s, p90 251 s. 519 observed pools are class 'unknown' (no launchpad evidence, mostly other DEX pools): outside the analysis population by pre-registration, reported.
+- PROBLEM FOUND: 24 of 126 polls (19%) did not overlap the previous poll, so pools created in bursts may have been missed. Fix (amendment A7, collection only): adaptive paging until overlap, polling every minute, gap still
+  counted when the page limit is hit. 2 new tests (28 in test_launches). Launches missed before the fix cannot be recovered; the gap count travels with every result.
+- No test reached its minimum sample yet (the 6 h exits had not matured). The run in progress (#2) uses the OLD workflow: the fixes, paper trading R1, price cross-check, daily report and hourly saves need PR #2 merged.
+- Built the live path the user asked for, so real trading is a configuration change for the OWNER later: `bot/executor.py` (quote -> build -> validate -> simulate -> sign -> send -> confirm -> close token account),
+  `bot/live.py` (engine on the same signals as paper R1; dry mode sends nothing and needs only a public key), `docs/LIVE.md` (steps, limits, what is not verified). Hard caps in code (config can only tighten), four independent
+  conditions for any send, agent-sandbox detection, burner wallet balance cap, key file rules, KILL file stops entries but not exits.
+  The transaction validator was checked against a REAL Jupiter swap transaction (8 instructions: ComputeBudget x2, ATA, System transfer, Token SyncNative, ATA, Jupiter route, Token CloseAccount) and rejects malicious variants
+  (extra transfer, unknown program, close/ATA to another owner, wrong fee payer). 43 executor and live tests; 9 deliberate mutations of the safety-critical code are each caught. A test scans tracked files for key-like content.
+- Nothing was run with a funded wallet and no key exists in this environment. Not verified: mainnet landing and fees, `priceImpactPct` unit, Token-2022 close path (mocks only).
+
 ## 2026-11-19 — user pushed back on the two-week rule: paper trading R1 added, reporting made tail-aware (pending merge of PR #2)
 - Valid criticism accepted: a median or trimmed mean is blind to a strategy that lives on rare large winners. Amendment A6 (before any trade or persisted return): every cell also reports the untrimmed mean,
   the share of returns at or above +100%, the share of total gain from the top 1%, and the mean without that top 1%. Primary median tests unchanged.

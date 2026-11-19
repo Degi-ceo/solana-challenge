@@ -50,7 +50,9 @@ jobs:
 
       - name: Tests
         if: steps.stop.outputs.stop != 'true'
-        run: python3 -W ignore -m unittest discover -s bot -p "test_*.py"
+        run: |
+          pip install -q solders
+          python3 -W ignore -m unittest discover -s bot -p "test_*.py"
 
       - name: Data sources reachable from this runner
         if: steps.stop.outputs.stop != 'true'

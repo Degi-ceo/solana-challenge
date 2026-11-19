@@ -83,6 +83,46 @@ class TestStreamGaps(unittest.TestCase):
         self.assertEqual(L.meta(db, "stream_gaps"), 0)
 
 
+class TestAdaptivePolling(unittest.TestCase):
+    def pages(self, per_page, total, base):
+        """Fake listing: `total` pools, newest first, `per_page` per page; records which pages were requested."""
+        rows = [gt_row(f"{base}{i}", "pumpswap", 9000, NOW - i) for i in range(total)]
+        asked = []
+
+        def fn(path):
+            pg = int(path.split("page=")[1])
+            asked.append(pg)
+            return listing(*rows[(pg - 1) * per_page: pg * per_page])
+        return fn, asked
+
+    def test_stops_as_soon_as_it_reaches_pools_already_seen(self):
+        db = new_db()
+        fn, asked = self.pages(20, 100, "a")
+        L.poll_stream(db, NOW, fn, pages=10)                               # first poll of a fresh database: three pages at most
+        self.assertEqual(asked, [1, 2, 3])
+        # next poll: 30 pools are newer than anything seen before, the rest are old ones
+        newer = [gt_row(f"n{i}", "pumpswap", 9000, NOW + 100 + i) for i in range(30)]
+        older = [gt_row(f"a{i}", "pumpswap", 9000, NOW - i) for i in range(100)]
+        rows = newer[::-1] + older
+        asked2 = []
+
+        def fn2(path):
+            pg = int(path.split("page=")[1])
+            asked2.append(pg)
+            return listing(*rows[(pg - 1) * 20: pg * 20])
+        L.poll_stream(db, NOW + 60, fn2, pages=10)
+        self.assertEqual(asked2, [1, 2])                                   # page 2 contains the overlap, so page 3 is never requested
+        self.assertEqual(L.meta(db, "stream_gaps"), 0)
+
+    def test_hitting_the_page_limit_without_overlap_is_a_gap(self):
+        db = new_db()
+        fn, _ = self.pages(20, 100, "a")
+        L.poll_stream(db, NOW, fn, pages=10)
+        rows = [gt_row(f"z{i}", "pumpswap", 9000, NOW + 1000 + i) for i in range(400)]     # 400 new pools: far more than 3 pages
+        L.poll_stream(db, NOW + 60, lambda path: listing(*rows[(int(path.split("page=")[1]) - 1) * 20: int(path.split("page=")[1]) * 20]), pages=3)
+        self.assertEqual(L.meta(db, "stream_gaps"), 1)
+
+
 class TestSnapshots(unittest.TestCase):
     def setUp(self):
         self.db = new_db()

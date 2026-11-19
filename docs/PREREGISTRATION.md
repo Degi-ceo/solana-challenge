@@ -79,4 +79,7 @@ Detection delay (up to 5 min), GeckoTerminal price quality for thin pools, wash-
   H7 is **forward and exploratory**: it runs continuously without waiting for any week rule, is not part of the Holm family, and is always reported with a bootstrap interval of the mean net return per trade.
   (c) **Evidence statement for H7.** With fewer than 30 closed trades the report says "not enough trades". With 30 or more it states whether the 95% bootstrap interval of the mean net return per trade excludes zero and how much of the total gain comes
   from the single best trade. Whether to risk real money on it is the owner's decision, made outside this repository's sessions; the report only states the evidence level.
+- **2026-11-19 (A7), collection procedure only, no change to any definition or test:** the first 5.5 hours of persisted data showed that 24 of 126 stream polls (19%) did not overlap the previous poll, so pools
+  created during bursts may have been missed. The poller now fetches pages adaptively until it reaches pools already seen and runs every minute; a poll that hits the page limit without overlap is still counted as a stream gap
+  and reported. Launches missed before this change cannot be recovered; the gap count is reported with every result so the size of the possible bias is visible.
 

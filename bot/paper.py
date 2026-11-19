@@ -100,22 +100,13 @@ def manage(db, now, gt_get, http_json, sol_usd, st):
             st["closed"] += 1
 
 
-def enter(db, now, http_json, sol_usd, st):
-    if bot.KILL.exists():
-        st["halt"] = "KILL file"
-        return
-    if daily_pnl(db, now) <= -DAILY_LOSS:
-        st["halt"] = "daily loss limit"
-        return
-    rows = db.execute("""SELECT l.*, s.ts AS snap_ts, s.price AS snap_px, s.liq AS snap_liq FROM launches l
+def eligible(db, now, st, taken_table="paper_positions"):
+    """Fresh graduates that pass every R1 entry condition EXCEPT capacity and the fresh quote. Shared by the paper and the live engine so they trade the same signals."""
+    rows = db.execute(f"""SELECT l.*, s.ts AS snap_ts, s.price AS snap_px, s.liq AS snap_liq FROM launches l
                          JOIN snaps s ON s.pool=l.pool AND s.age_target_min=? AND s.missed=0 AND s.price>0
                          WHERE l.status='observed' AND l.class IN ('memecoin_confirmed','memecoin_probable') AND s.ts >= ?
-                         AND l.mint NOT IN (SELECT mint FROM paper_positions) ORDER BY s.ts""", (ENTRY_AGE, now - STALE_S)).fetchall()
+                         AND l.mint NOT IN (SELECT mint FROM {taken_table}) ORDER BY s.ts""", (ENTRY_AGE, now - STALE_S)).fetchall()
     for r in rows:
-        n_open = db.execute("SELECT COUNT(*) FROM paper_positions WHERE status='open'").fetchone()[0]
-        if n_open >= MAX_OPEN or free_cash(db) < SIZE_USD:
-            _bump(st, "no_capacity")
-            return
         rec = E.load_record(db, r)
         g = E.gates(rec, ENTRY_AGE, enforce_time=False)
         if g is None:
@@ -127,6 +118,21 @@ def enter(db, now, http_json, sol_usd, st):
         if (r["snap_liq"] or 0) < LIQ_FLOOR * 10:
             _bump(st, "thin")
             continue
+        yield r
+
+
+def enter(db, now, http_json, sol_usd, st):
+    if bot.KILL.exists():
+        st["halt"] = "KILL file"
+        return
+    if daily_pnl(db, now) <= -DAILY_LOSS:
+        st["halt"] = "daily loss limit"
+        return
+    for r in eligible(db, now, st):
+        n_open = db.execute("SELECT COUNT(*) FROM paper_positions WHERE status='open'").fetchone()[0]
+        if n_open >= MAX_OPEN or free_cash(db) < SIZE_USD:
+            _bump(st, "no_capacity")
+            return
         q = L.round_trip(http_json, r["mint"], SIZE_USD, sol_usd)
         if not (q["buy_ok"] and q["sell_ok"]) or q["rt_pct"] is None or q["rt_pct"] > E.SELL_GATE_PCT:
             _bump(st, "sell_gate_fresh")

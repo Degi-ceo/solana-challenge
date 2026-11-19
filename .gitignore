@@ -11,3 +11,6 @@ bot/data/
 *.db-journal
 *.db-wal
 *.db-shm
+burner*
+*.keypair
+live.db
