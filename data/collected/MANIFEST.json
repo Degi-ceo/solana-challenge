@@ -1,0 +1,14 @@
+{
+  "written_utc": "2026-11-21 14:07:44",
+  "rows": {
+    "launches": 18711,
+    "snaps": 89230,
+    "probes": 15244,
+    "safety": 11504,
+    "meta": 16
+  },
+  "first_detected_utc": "2026-11-18 23:14:51",
+  "last_detected_utc": "2026-11-21 14:04:25",
+  "bytes_gz": 15348760,
+  "sha256_gz": "57acb4a5c6434e92ec391e5c7b5710db85c65541ae144e0f0f696a0ff57a4fbe"
+}
