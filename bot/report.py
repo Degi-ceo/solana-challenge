@@ -10,6 +10,8 @@ import time
 from pathlib import Path
 
 import eventstudy as E
+import paper as PP
+import random
 import launches as L
 
 CAVEATS = [
@@ -63,7 +65,25 @@ def build(db, boot=10_000):
             d = t.get(k)
             if d and d.get("n"):
                 lines.append(f"- {h} {k}: n={d['n']}, median {100*d['median']:+.1f}%, trimmed mean {100*d['trimmed_mean']:+.1f}%, share <= -50%: {100*d['share_le_minus50']:.0f}%")
-    lines += ["", "Results below the pre-registered minimum sample are descriptive only and say nothing about the claims.", "", "## Caveats", ""] + [f"- {c}" for c in CAVEATS] + [""]
+    lines += ["", "Results below the pre-registered minimum sample are descriptive only and say nothing about the claims.", ""]
+    ps = PP.summary(db)
+    lines += ["## Paper trading, rule set R1 (H7, forward, exploratory)", "",
+              f"- Bankroll $5.00 -> equity ${ps['equity_usd']:.2f} (net {ps['net_pnl_usd']:+.2f} USD); closed trades {ps['closed']}, open {ps['open']}, skipped at the fresh sell gate {ps['skipped_fresh_gate']}."]
+    if ps["closed"]:
+        pn = [r_[0] for r_ in db.execute("SELECT pnl_usd FROM paper_positions WHERE status='closed'")]
+        rng = random.Random(7)
+        means = sorted(sum(pn[rng.randrange(len(pn))] for _ in pn) / len(pn) for _ in range(2000))
+        lo, hi = means[50], means[1949]
+        verdict = ("not enough trades (fewer than 30): no statement about an edge" if ps["closed"] < 30 else
+                   ("the 95% interval of the mean per trade is above zero" if lo > 0 else "the 95% interval of the mean per trade includes zero or is below it"))
+        lines += [f"- Win rate {100*ps['win_rate']:.0f}%, mean {ps['mean_usd']:+.3f} USD per trade (95% bootstrap interval {lo:+.3f} to {hi:+.3f}), median {ps['median_usd']:+.3f}, best trade {ps['best_usd']:+.2f} USD"
+                  + (f" ({100*ps['best_share_of_gains']:.0f}% of all gains)" if ps.get("best_share_of_gains") else "") + f", max drawdown {ps['max_drawdown_usd']:.2f} USD.",
+                  f"- Exit reasons: {ps['reasons']}. Evidence level: {verdict}."]
+        for row in db.execute("SELECT name, opened_ts, closed_ts, reason, pnl_usd FROM paper_positions WHERE status='closed' ORDER BY closed_ts DESC LIMIT 15"):
+            lines.append(f"  - {row['name']}: {row['reason']}, {row['pnl_usd']:+.3f} USD, held {(row['closed_ts']-row['opened_ts'])/3600:.1f} h")
+    else:
+        lines.append("- No closed paper trades yet.")
+    lines += ["", "## Caveats", ""] + [f"- {c}" for c in CAVEATS] + [""]
     return "\n".join(lines)
 
 

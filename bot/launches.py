@@ -59,6 +59,9 @@ def connect(path=DB_PATH):
       total_holders INT, lp_locked_pct REAL, mint_authority INT, freeze_authority INT, transfer_fee_pct REAL, extensions TEXT,
       token_program TEXT, risks TEXT);
     CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value REAL);
+    CREATE TABLE IF NOT EXISTS paper_positions(id INTEGER PRIMARY KEY, pool TEXT, mint TEXT, name TEXT, opened_ts REAL, entry_px REAL, entry_liq REAL, size_usd REAL,
+      rt_pct REAL, entry_delay_s REAL, peak_px REAL, last_px REAL, last_ts REAL, misses INT DEFAULT 0, status TEXT DEFAULT 'open',
+      closed_ts REAL, exit_px REAL, reason TEXT, pnl_usd REAL);
     CREATE INDEX IF NOT EXISTS launches_status ON launches(status, created_ts);
     """)
     have = {r[1] for r in db.execute("PRAGMA table_info(snaps)")}
@@ -329,7 +332,7 @@ def sol_price(http_json):
         return None
 
 
-def cycle(db, now=None, gt_get=None, http_json=None, do_stream=True):
+def cycle(db, now=None, gt_get=None, http_json=None, do_stream=True, paper_on=True):
     import data
     now = now or time.time()
     gt_get = gt_get or data.gt_get
@@ -341,6 +344,9 @@ def cycle(db, now=None, gt_get=None, http_json=None, do_stream=True):
     px = sol_price(http_json)
     st["probes"] = run_probes(db, now, http_json, px) if px else 0
     st["safety"] = run_safety(db, now, http_json)
+    if paper_on:
+        import paper
+        st["paper"] = paper.step(db, now, gt_get, http_json, px)
     return st
 
 
@@ -368,6 +374,12 @@ def stats(db):
     print("snapshots taken:", n("SELECT COUNT(*) FROM snaps WHERE missed=0"), "| missed:", n("SELECT COUNT(*) FROM snaps WHERE missed=1"), "| gone:", n("SELECT COUNT(*) FROM snaps WHERE missed=2"))
     print("by age:", {r[0]: r[1] for r in db.execute("SELECT age_target_min, COUNT(*) FROM snaps WHERE missed=0 GROUP BY age_target_min ORDER BY age_target_min")})
     print("probes:", n("SELECT COUNT(*) FROM probes"), "| safety reports:", n("SELECT COUNT(*) FROM safety"), "| polls:", meta(db, "polls"), "| stream gaps:", meta(db, "stream_gaps"))
+    try:
+        import paper
+        ps = paper.summary(db)
+        print("paper trading (R1): closed", ps["closed"], "| open", ps["open"], "| net P&L $%+.2f" % ps["net_pnl_usd"], "| equity $%.2f" % ps["equity_usd"])
+    except Exception as e:                                  # stats must work on databases from before the paper table existed
+        print("paper trading: n/a", repr(e))
 
 
 if __name__ == "__main__":

@@ -206,6 +206,7 @@
 
   <section class="panel" id="p-strategy" role="tabpanel" aria-labelledby="t-strategy" hidden>
     <div class="stack">
+      <div class="card" id="papertrade"></div>
       <div class="card" id="prereg"></div>
       <div class="card" id="backtest"></div>
       <div class="card" id="trade"></div>
@@ -352,18 +353,20 @@
 
   /* ---------- overview: figures ---------- */
   var tr = S.paper_trades, figs = $('figs');
-  [['Equity', money(S.bankroll_usd), 'Started with ' + money(S.bankroll_usd)], ['Paper profit / loss', tr ? '' : '\u2014', tr ? '' : 'No trades yet'],
-   ['Paper trades', fInt.format(tr), 'Verdict needs ' + cfg.min_closed_trades], ['Challenge clock', S.run_started ? 'Day 1' : 'Day 0', S.run_started ? 'of ' + S.paper_days_total : 'Paper run not started \u00b7 7 days once it starts'],
+  var pc = S.paper_closed || 0, po = S.paper_open || 0;
+  [['Equity', money(S.paper_equity === undefined ? S.bankroll_usd : S.paper_equity), 'Started with ' + money(S.bankroll_usd)],
+   ['Paper profit / loss', pc ? (S.paper_pnl >= 0 ? '+' : '') + money(S.paper_pnl) : '\u2014', pc ? pc + ' closed, ' + po + ' open' : (po ? po + ' open, none closed yet' : 'No trades yet')],
+   ['Paper trades', fInt.format(pc + po), 'Evidence statement needs 30 closed'], ['Challenge clock', S.run_started ? 'Day 1' : 'Day 0', S.run_started ? 'of ' + S.paper_days_total : 'Paper run not started \u00b7 7 days once it starts'],
    ['SOL price', S.sol_usd ? '$' + S.sol_usd.toFixed(2) : '\u2014', 'Jupiter quote at snapshot']
   ].forEach(function (f) { add(figs, add(el('div', 'fig'), el('span', 'l', f[0]), el('span', 'v', f[1]), el('span', 's', f[2]))); });
 
   /* ---------- overview: verdict ---------- */
   var vd = $('verdict');
-  head(vd, 'Go / no-go', 'Not enough data yet', 'The verdict is decided by code from these limits, never by hand. It stays "not enough data" until the trade count is reached.');
+  head(vd, 'Evidence level', pc >= 30 ? 'Enough trades for a statement' : 'Not enough trades for a statement', 'Paper trading with rule set R1 runs continuously. The report states the evidence level; whether to risk real money is the owner\'s decision.');
   var vl = el('ul', 'rows');
-  [['Closed paper trades', tr + ' of ' + cfg.min_closed_trades, 'Below this, any result is noise.'],
-   ['Profit factor', '— (needs ' + cfg.min_profit_factor + ' or more)', 'Gross wins divided by gross losses, after costs.'],
-   ['Net profit after costs', '— (needs above ' + money(cfg.min_net_pnl_usd) + ')', 'Fees, slippage and network fees included.']
+  [['Closed paper trades', pc + ' of 30', 'Below 30 the report makes no statement about an edge.'],
+   ['Mean net return per trade, 95% interval', '\u2014', 'Must exclude zero. Computed in REPORT.md from a bootstrap.'],
+   ['Share of gains from the best trade', S.paper_best_share == null ? '\u2014' : Math.round(100 * S.paper_best_share) + '%', 'A strategy that lives on rare runners shows a high share. Stated, not hidden.']
   ].forEach(function (r) { var li = el('li'); add(li, el('span', 'nm', r[0]), el('span', 'val', r[1]), el('span', 'ds', r[2])); add(vl, li); });
   add(vd, vl);
 
@@ -657,6 +660,27 @@
       add(t3, h3, b3); add(tw3, t3); add(gs0, tw3);
     }
   }
+
+  /* ---------- strategy: paper trading (R1) ---------- */
+  var pt = $('papertrade'), PT = D.paper || [];
+  head(pt, 'Paper trading, rule set R1', pc ? pc + ' closed trades, ' + (S.paper_pnl >= 0 ? '+' : '') + money(S.paper_pnl) + ' so far' : 'No closed trades yet',
+    'Buys and sells on paper, on the same graduates the study observes, with fresh Jupiter quotes. No take-profit cap, so a runner is allowed to run. Paper only: nothing is sent.');
+  var rl = el('ul', 'rows stackv');
+  [['Entry', '15 minutes after graduation, only if every safety gate passes and a fresh $2.50 round trip costs at most 3%.'], ['Size and limits', '$2.50 per position, at most 2 open, $5 bankroll, daily loss limit $1.50, KILL file stops entries.'],
+   ['Exit', 'Stop at -20%. Trailing stop 30% below the peak once the position is up 50%. Liquidity collapse, a vanished pool or 48 hours also exit. If it cannot be sold the trade counts as -100%.']
+  ].forEach(function (r) { add(rl, add(el('li'), el('span', 'nm', r[0]), el('span', 'ds', r[1]))); });
+  add(pt, rl);
+  if (PT.length) {
+    var twp = el('div', 'scroll'), tp = el('table', 'cards'), thp = el('thead'), hrp = el('tr');
+    ['Token', 'Status', 'Opened', 'Held', 'Result', 'Exit'].forEach(function (c, i) { var th = el('th', i === 3 || i === 4 ? 'r' : '', c); th.scope = 'col'; add(hrp, th); });
+    add(thp, hrp); var bp = el('tbody');
+    PT.slice(0, 20).forEach(function (r) {
+      var tr = el('tr'); function td(l, t, c) { var x = el('td', c || '', t); x.dataset.label = l; return x; }
+      add(tr, td('Token', r.symbol), td('Status', r.status), td('Opened', r.opened), td('Held', r.held_h == null ? '\u2014' : r.held_h + ' h', 'r num'),
+        td('Result', r.status === 'closed' ? (r.pnl_usd >= 0 ? '+' : '-') + money(Math.abs(r.pnl_usd)) : 'open', 'r num'), td('Exit', r.reason || '')); add(bp, tr);
+    });
+    add(tp, thp, bp); add(twp, tp); add(pt, twp);
+  } else { add(pt, el('div', 'empty', 'The first paper trade appears when a graduate passes every gate. Most do not, which is the point of the gates.')); }
 
   /* ---------- strategy: pre-registered tests progress ---------- */
   var pr = $('prereg'), PR = D.prereg || [];

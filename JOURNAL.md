@@ -1,5 +1,15 @@
 # JOURNAL (source of truth between sessions — update every session)
 
+## 2026-11-19 — user pushed back on the two-week rule: paper trading R1 added, reporting made tail-aware (pending merge of PR #2)
+- Valid criticism accepted: a median or trimmed mean is blind to a strategy that lives on rare large winners. Amendment A6 (before any trade or persisted return): every cell also reports the untrimmed mean,
+  the share of returns at or above +100%, the share of total gain from the top 1%, and the mean without that top 1%. Primary median tests unchanged.
+- Clarification kept: the weekly rule governs when an EDGE may be claimed from the event study; it never blocked paper trading. Real-money trading from this repository's sessions stays out of scope (hard rule); the owner decides outside.
+- Built `bot/paper.py` (H7, rule set R1, fixed and not tuned): entry 15 min after graduation if all safety gates pass and a fresh $2.50 Jupiter round trip is at most 3%; $2.50 per position, at most 2 open of a $5 bankroll;
+  stop -20%, NO take-profit, trailing stop 30% below the peak once +50%, liquidity/vanish/48 h exits, failed sell = -100%, P&L from the polled price minus the measured round trip and $0.02. Integrated into the collector loop.
+  17 tests; five deliberate mutations (a +40% take-profit cap, ignored stop, trail armed from the start, uncapped loss, skipped gates) are each caught. 131 tests pass.
+- Evidence statement for H7 (A6c): with fewer than 30 closed trades the report says so; with 30 or more it states whether the 95% bootstrap interval of the mean net return per trade excludes zero and the share of gains from the best trade.
+- Dashboard and REPORT.md now show paper equity, P&L, trades and exit reasons. Takes effect for the collector after PR #2 is merged and the next run starts.
+
 ## 2026-11-19 — experiment hardening while data accrues (PR #2, awaiting merge)
 - User asked why collection takes so long if over 100,000 memecoins launch per day. Measured: about 66,000-120,000 new pools per day, but 86% sit on bonding curves and never reach a DEX; the testable
   population (memecoin graduates after the size and class filters) is about 65 per hour (about 1,500 per day). The wait is not for tokens: it is for outcomes to mature (6 h, 24 h, 48 h exits) and for a second

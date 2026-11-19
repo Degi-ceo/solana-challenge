@@ -271,9 +271,9 @@ def launch_data():
     import sqlite3
     path = BASE / "launches.db"
     if not path.exists():
-        return {}, [], [], []
-    db = sqlite3.connect(path)
-    db.row_factory = sqlite3.Row
+        return {}, [], [], [], []
+    import launches as _L
+    db = _L.connect(path)                       # creates tables added after an older snapshot was written
     q = lambda sql, *a: db.execute(sql, a).fetchall()
     one = lambda sql, *a: db.execute(sql, a).fetchone()[0]
     meta = {r["key"]: r["value"] for r in q("SELECT key, value FROM meta")}
@@ -298,6 +298,14 @@ def launch_data():
                    JOIN snaps s2 ON s2.pool=l.pool AND s2.age_target_min=? AND s2.missed IN (0,2)
                    WHERE l.status='observed' AND l.class IN ('memecoin_confirmed','memecoin_probable')""", a, b)
         prereg.append({"id": hid, "claim": claim, "entry_age": a, "exit_age": b, "n": n, "needed": MIN_N, "pct": round(100 * min(1, n / MIN_N))})
+    import paper as _paper
+    pstat = _paper.summary(db)
+    paper_rows = [{"symbol": r["name"], "status": r["status"], "opened": iso(r["opened_ts"]), "size_usd": r["size_usd"], "pnl_usd": round(r["pnl_usd"] or 0, 4),
+                   "reason": r["reason"] or "", "held_h": None if not r["closed_ts"] else round((r["closed_ts"] - r["opened_ts"]) / 3600, 1)}
+                  for r in q("SELECT * FROM paper_positions WHERE status IN ('open','closed') ORDER BY opened_ts DESC LIMIT 60")]
+    summ["paper_closed"], summ["paper_open"], summ["paper_pnl"], summ["paper_equity"] = pstat["closed"], pstat["open"], round(pstat["net_pnl_usd"], 3), round(pstat["equity_usd"], 3)
+    summ["paper_win_rate"] = pstat.get("win_rate")
+    summ["paper_best_share"] = pstat.get("best_share_of_gains")
     recent = []
     for r in q("""SELECT l.pool, l.name, l.dex, l.class, l.detected_ts, l.liq_at_detect, l.detect_delay_s, l.safety_done,
                   (SELECT COUNT(*) FROM snaps s WHERE s.pool=l.pool AND s.missed=0) snaps,
@@ -307,7 +315,7 @@ def launch_data():
         recent.append({"name": r["name"], "dex": r["dex"], "class": r["class"], "detected": iso(r["detected_ts"]), "liq_usd": round(r["liq_at_detect"]),
                        "delay_s": round(r["detect_delay_s"]), "snapshots": r["snaps"], "rt_pct": None if r["rt"] is None else round(r["rt"], 2),
                        "insiders": r["ins"], "top10_pct": r["top10"]})
-    return summ, ages, prereg, recent
+    return summ, ages, prereg, recent, paper_rows
 
 
 def build(outdir, live_net=True):
@@ -335,7 +343,8 @@ def build(outdir, live_net=True):
     }]
     pdb_rows = []
     try:
-        pdb = bot.db_connect(bot.BASE / cfg["db"])
+        pdb = None   # the old single-token paper loop is not used by the memecoin experiment
+        raise RuntimeError("legacy paper db not used")
         for r in pdb.execute("SELECT * FROM positions ORDER BY opened_ts DESC LIMIT 100"):
             pdb_rows.append({"symbol": r["symbol"], "status": r["status"], "opened": iso(r["opened_ts"]),
                              "size_usd": r["size_usd"], "pnl_usd": round(r["pnl"] or 0, 4), "reason": r["reason"] or ""})
@@ -368,7 +377,7 @@ def build(outdir, live_net=True):
     except Exception:
         pass
     summary[0].update(last_cycle)
-    ls, l_ages, l_prereg, l_recent = launch_data()
+    ls, l_ages, l_prereg, l_recent, l_paper = launch_data()
     summary[0].update(ls)
     bt_path = BASE / "data" / "backtest_last.json"
     backtest = json.loads(bt_path.read_text()) if bt_path.exists() else []
@@ -383,7 +392,7 @@ def build(outdir, live_net=True):
         "network": network_rows(live_net, outdir),
         "activity": activity_rows(),
         "history": history_rows(outdir, now, n_done, n_candles, len(elig)),
-        "paper": pdb_rows,
+        "paper": l_paper or pdb_rows,
         "backtest": backtest,
         "costmath": cm_rows,
         "costsum": cm_sum,
